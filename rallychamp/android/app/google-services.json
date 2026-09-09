@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "199964689795",
+    "project_id": "rallychamp",
+    "storage_bucket": "rallychamp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:199964689795:android:835d3743d59cfbc41162b6",
+        "android_client_info": {
+          "package_name": "com.example.rallychamp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgzK4svjb5BWnwdUv-230oLrKbvH7yJME"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

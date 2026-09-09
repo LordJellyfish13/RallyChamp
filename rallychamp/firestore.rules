@@ -1,0 +1,57 @@
+rules_version = '2';
+
+// Anything not explicitly matched below is denied by default — that's
+// Firestore's normal behavior, not something we have to write ourselves.
+// Extend this file collection-by-collection as each feature is built
+// (see dev_notes.md §9 for the full planned schema).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // News feed: publicly readable (guest access, no login required).
+    // No client write path yet — posts will be created by the rally-publish
+    // flow once that's built.
+    match /news/{postId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Personal profile: name, phone, OIB, judge license. Self-access only
+    // for now — organizer/admin read (to review applications) is a
+    // deliberately deferred rule, added once the review UI exists and can
+    // check a rally's adminUids.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Marshal/judge applications. Applicant can file and read their own;
+    // no update/delete yet — the organizer-review flow will add its own
+    // rule (status changes) when it's built. Admin-read is deferred for the
+    // same reason as users/{uid} above.
+    match /rallies/{rallyId}/staffApplications/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.roleRequested in ['marshal', 'judge'];
+      allow update, delete: if false;
+    }
+
+    // Team/competitor entries. Public fields (car number, class, team/driver
+    // name) are readable by anyone — entry lists are meant to be public per
+    // dev_notes.md §5 — but not yet gated on the rally being published,
+    // since rally creation/visibility doesn't exist yet. Revisit once it
+    // does. Contact info stays in the private subdoc, self-access only.
+    match /rallies/{rallyId}/entries/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.status == 'pending';
+      allow update, delete: if false;
+
+      match /private/{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+  }
+}

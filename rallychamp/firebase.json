@@ -1,0 +1,29 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "rallychamp",
+          "appId": "1:199964689795:android:835d3743d59cfbc41162b6",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "rallychamp",
+          "configurations": {
+            "android": "1:199964689795:android:835d3743d59cfbc41162b6",
+            "ios": "1:199964689795:ios:4d30518da29ce3a21162b6",
+            "macos": "1:199964689795:ios:4d30518da29ce3a21162b6",
+            "web": "1:199964689795:web:6681c6512cc282501162b6",
+            "windows": "1:199964689795:web:350f483e7ed5ab101162b6"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'news_page.dart';
-import 'map_page.dart';
-import 'status_page.dart';
-import 'results_page.dart';
+import '../../features/map/presentation/map_page.dart';
+import '../../features/news/presentation/news_page.dart';
+import '../../features/results/presentation/results_page.dart';
+import '../../features/status/presentation/status_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

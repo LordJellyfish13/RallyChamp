@@ -12,7 +12,20 @@
           "package_name": "com.example.rallychamp"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "199964689795-3atlqdn2g4rfb37m15j1cukddvo4hv3v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.rallychamp",
+            "certificate_hash": "780394b70ecf404289ea50ef5bc33673b147c6d3"
+          }
+        },
+        {
+          "client_id": "199964689795-kjbulqr8vlio6lsteinjbtm1q1lhmqpt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAgzK4svjb5BWnwdUv-230oLrKbvH7yJME"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "199964689795-kjbulqr8vlio6lsteinjbtm1q1lhmqpt.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "199964689795-296skc29nihdc51ffdt66hrsdppuuduh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.rallychamp"
+              }
+            }
+          ]
         }
       }
     }

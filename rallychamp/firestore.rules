@@ -8,11 +8,41 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // News feed: publicly readable (guest access, no login required).
-    // No client write path yet — posts will be created by the rally-publish
-    // flow once that's built.
+    // Created either by the rally-publish flow (rallyId set, checked against
+    // that rally's adminUids) — no other client write path yet.
     match /news/{postId} {
       allow read: if true;
-      allow write: if false;
+      allow create: if request.auth != null
+        && request.resource.data.rallyId != null
+        && request.auth.uid in get(
+          /databases/$(database)/documents/rallies/$(request.resource.data.rallyId)
+        ).data.adminUids;
+      allow update, delete: if false;
+    }
+
+    // Rallies: public once published, otherwise only visible to their
+    // admins. Anyone signed in can create one and becomes its sole admin —
+    // there's no separate "become an organizer" gate yet (see dev_notes.md
+    // §5). Stages always exist (even for single-stage rallies) and inherit
+    // the parent rally's read access; no stage editing UI yet so
+    // create-only.
+    match /rallies/{rallyId} {
+      allow read: if resource.data.visibility == 'published'
+        || (request.auth != null && request.auth.uid in resource.data.adminUids);
+      allow create: if request.auth != null
+        && request.resource.data.adminUids.hasOnly([request.auth.uid])
+        && request.resource.data.status == 'setup';
+      allow update: if request.auth != null && request.auth.uid in resource.data.adminUids;
+      allow delete: if false;
+
+      match /stages/{stageId} {
+        allow read: if get(/databases/$(database)/documents/rallies/$(rallyId)).data.visibility == 'published'
+          || (request.auth != null
+            && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
+        allow create: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids;
+        allow update, delete: if false;
+      }
     }
 
     // Personal profile: name, phone, OIB, judge license. Self-access only
@@ -37,12 +67,14 @@ service cloud.firestore {
     }
 
     // Team/competitor entries. Public fields (car number, class, team/driver
-    // name) are readable by anyone — entry lists are meant to be public per
-    // dev_notes.md §5 — but not yet gated on the rally being published,
-    // since rally creation/visibility doesn't exist yet. Revisit once it
-    // does. Contact info stays in the private subdoc, self-access only.
+    // name) are readable once the rally is published — entry lists are
+    // meant to be public per dev_notes.md §5 — or always visible to that
+    // rally's admins. Contact info stays in the private subdoc, self-access
+    // only.
     match /rallies/{rallyId}/entries/{uid} {
-      allow read: if true;
+      allow read: if get(/databases/$(database)/documents/rallies/$(rallyId)).data.visibility == 'published'
+        || (request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
       allow create: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.status == 'pending';

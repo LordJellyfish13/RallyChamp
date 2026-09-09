@@ -11,24 +11,41 @@ class ApplicationsRepository {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
 
-  /// Creates a real account (email/password) and files a marshal/judge
-  /// application in one go. See dev_notes.md §5 for why this is a plain
-  /// sign-up rather than upgrading an anonymous session for now.
+  /// Resolves the uid to write application data under. If [password] is
+  /// given, creates a new email/password account. If null, the caller has
+  /// already authenticated some other way (e.g. Google Sign-In) and we just
+  /// use the currently signed-in user.
+  Future<String> _resolveUid({required String email, String? password}) async {
+    if (password != null) {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return credential.user!.uid;
+    }
+    final current = _auth.currentUser;
+    if (current == null) {
+      throw StateError('No authenticated user — sign in before submitting.');
+    }
+    return current.uid;
+  }
+
+  /// Files a marshal/judge application. Either creates a new email/password
+  /// account ([password] given) or attaches to the already-signed-in user
+  /// ([password] null, e.g. after Google Sign-In). See dev_notes.md §5 for
+  /// why plain sign-up is the default rather than upgrading an anonymous
+  /// session.
   Future<void> submitStaffApplication({
     required String rallyId,
     required StaffRole role,
     required String name,
     required String email,
-    required String password,
+    String? password,
     required String phone,
     required String oib,
     String? licenseNumber,
   }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    final uid = credential.user!.uid;
+    final uid = await _resolveUid(email: email, password: password);
 
     final batch = _firestore.batch();
     batch.set(_firestore.collection('users').doc(uid), {
@@ -67,15 +84,11 @@ class ApplicationsRepository {
     required String carNumber,
     required String carClass,
     required String email,
-    required String password,
+    String? password,
     required String phone,
     required String oib,
   }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    final uid = credential.user!.uid;
+    final uid = await _resolveUid(email: email, password: password);
 
     final batch = _firestore.batch();
     batch.set(_firestore.collection('users').doc(uid), {

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../applications/data/staff_role.dart';
 import '../../applications/presentation/staff_application_form.dart';
 import '../../applications/presentation/team_entry_form.dart';
+import '../../rallies/presentation/create_rally_form.dart';
+import '../../rallies/presentation/my_rallies_page.dart';
 import '../bloc/news_cubit.dart';
 import '../bloc/news_state.dart';
 import '../data/news_post.dart';
@@ -28,7 +30,29 @@ class _NewsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('News')),
+      appBar: AppBar(
+        title: const Text('News'),
+        actions: [
+          IconButton(
+            tooltip: 'My rallies',
+            icon: const Icon(Icons.event_note_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const MyRalliesPage()),
+              );
+            },
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Create rally',
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const CreateRallyForm()),
+          );
+        },
+        child: const Icon(Icons.add),
+      ),
       body: BlocBuilder<NewsCubit, NewsState>(
         builder: (context, state) {
           switch (state) {

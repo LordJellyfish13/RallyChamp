@@ -56,22 +56,24 @@ class DefaultFirebaseOptions {
     projectId: 'rallychamp',
     storageBucket: 'rallychamp.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDi-IWAbMaGMgagZ4MAz0_DsW8Gvc4L_m4',
     appId: '1:199964689795:ios:4d30518da29ce3a21162b6',
     messagingSenderId: '199964689795',
     projectId: 'rallychamp',
     storageBucket: 'rallychamp.firebasestorage.app',
+    androidClientId: '199964689795-3atlqdn2g4rfb37m15j1cukddvo4hv3v.apps.googleusercontent.com',
+    iosClientId: '199964689795-296skc29nihdc51ffdt66hrsdppuuduh.apps.googleusercontent.com',
     iosBundleId: 'com.example.rallychamp',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDi-IWAbMaGMgagZ4MAz0_DsW8Gvc4L_m4',
     appId: '1:199964689795:ios:4d30518da29ce3a21162b6',
     messagingSenderId: '199964689795',
     projectId: 'rallychamp',
     storageBucket: 'rallychamp.firebasestorage.app',
+    androidClientId: '199964689795-3atlqdn2g4rfb37m15j1cukddvo4hv3v.apps.googleusercontent.com',
+    iosClientId: '199964689795-296skc29nihdc51ffdt66hrsdppuuduh.apps.googleusercontent.com',
     iosBundleId: 'com.example.rallychamp',
   );
 

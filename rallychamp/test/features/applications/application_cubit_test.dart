@@ -14,7 +14,7 @@ class _FakeApplicationsRepository implements ApplicationsRepository {
     required StaffRole role,
     required String name,
     required String email,
-    required String password,
+    String? password,
     required String phone,
     required String oib,
     String? licenseNumber,
@@ -33,7 +33,7 @@ class _FakeApplicationsRepository implements ApplicationsRepository {
     required String carNumber,
     required String carClass,
     required String email,
-    required String password,
+    String? password,
     required String phone,
     required String oib,
   }) async {

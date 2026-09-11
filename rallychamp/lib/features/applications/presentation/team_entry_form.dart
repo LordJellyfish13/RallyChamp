@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/auth/auth_repository.dart';
+import '../../../core/theme/app_colors.dart';
 import '../bloc/application_cubit.dart';
 import '../bloc/application_state.dart';
 import '../data/applications_repository.dart';
@@ -34,6 +35,7 @@ class _TeamEntryFormViewState extends State<_TeamEntryFormView> {
   final _authRepository = AuthRepository();
   final _teamNameController = TextEditingController();
   final _driverNameController = TextEditingController();
+  final _coDriverNameController = TextEditingController();
   final _carNumberController = TextEditingController();
   final _carClassController = TextEditingController();
   final _emailController = TextEditingController();
@@ -49,6 +51,7 @@ class _TeamEntryFormViewState extends State<_TeamEntryFormView> {
   void dispose() {
     _teamNameController.dispose();
     _driverNameController.dispose();
+    _coDriverNameController.dispose();
     _carNumberController.dispose();
     _carClassController.dispose();
     _emailController.dispose();
@@ -83,6 +86,7 @@ class _TeamEntryFormViewState extends State<_TeamEntryFormView> {
       rallyId: widget.rallyId,
       teamName: _teamNameController.text.trim(),
       driverName: _driverNameController.text.trim(),
+      coDriverName: _coDriverNameController.text.trim(),
       carNumber: _carNumberController.text.trim(),
       carClass: _carClassController.text.trim(),
       email: _emailController.text.trim(),
@@ -132,6 +136,14 @@ class _TeamEntryFormViewState extends State<_TeamEntryFormView> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
+                  controller: _coDriverNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Co-driver name',
+                  ),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
                   controller: _carNumberController,
                   decoration: const InputDecoration(labelText: 'Car number'),
                   keyboardType: TextInputType.number,
@@ -149,7 +161,10 @@ class _TeamEntryFormViewState extends State<_TeamEntryFormView> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
                       children: [
-                        const Icon(Icons.check_circle, color: Colors.green),
+                        const Icon(
+                          Icons.check_circle,
+                          color: AppColors.success,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(

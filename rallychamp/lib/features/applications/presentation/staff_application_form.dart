@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/auth/auth_repository.dart';
+import '../../../core/theme/app_colors.dart';
 import '../bloc/application_cubit.dart';
 import '../bloc/application_state.dart';
 import '../data/applications_repository.dart';
@@ -130,7 +131,10 @@ class _StaffApplicationFormViewState
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Row(
                       children: [
-                        const Icon(Icons.check_circle, color: Colors.green),
+                        const Icon(
+                          Icons.check_circle,
+                          color: AppColors.success,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(

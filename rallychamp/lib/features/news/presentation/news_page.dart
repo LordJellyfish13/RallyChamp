@@ -31,7 +31,10 @@ class _NewsView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('News'),
+        title: const Text(
+          'RALLYCHAMP',
+          style: TextStyle(letterSpacing: 0.5),
+        ),
         actions: [
           IconButton(
             tooltip: 'My rallies',

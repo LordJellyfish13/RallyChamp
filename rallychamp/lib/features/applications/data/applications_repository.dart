@@ -81,6 +81,7 @@ class ApplicationsRepository {
     required String rallyId,
     required String teamName,
     required String driverName,
+    required String coDriverName,
     required String carNumber,
     required String carClass,
     required String email,
@@ -108,6 +109,7 @@ class ApplicationsRepository {
     batch.set(entryRef, {
       'teamName': teamName,
       'driverName': driverName,
+      'coDriverName': coDriverName,
       'carNumber': carNumber,
       'class': carClass,
       'status': 'pending',

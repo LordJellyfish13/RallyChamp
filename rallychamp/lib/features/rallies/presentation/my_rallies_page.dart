@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../bloc/my_rallies_cubit.dart';
 import '../bloc/my_rallies_state.dart';
 import '../data/rally_repository.dart';
@@ -73,6 +74,16 @@ class _MyRalliesView extends StatelessWidget {
                               Chip(
                                 label: Text(
                                   rally.isDraft ? 'Draft' : 'Published',
+                                ),
+                                backgroundColor: rally.isDraft
+                                    ? AppColors.neutralTint
+                                    : AppColors.successTint,
+                                labelStyle: TextStyle(
+                                  color: rally.isDraft
+                                      ? AppColors.inkSoft
+                                      : AppColors.success,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
                                 ),
                                 visualDensity: VisualDensity.compact,
                                 materialTapTargetSize:

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'checkpoint.dart';
 import 'rally_summary.dart';
 
 class RallyRepository {
@@ -30,6 +31,7 @@ class RallyRepository {
     required DateTime endDate,
     required int stageCount,
     required bool publishImmediately,
+    bool allowWalkupMarshals = true,
   }) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) {
@@ -47,6 +49,7 @@ class RallyRepository {
       'status': 'setup',
       'isMultiStage': stageCount > 1,
       'visibility': publishImmediately ? 'published' : 'draft',
+      'allowWalkupMarshals': allowWalkupMarshals,
       'adminUids': [uid],
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -130,5 +133,53 @@ class RallyRepository {
       'authorUid': uid,
     });
     await batch.commit();
+  }
+
+  /// A single rally by id, for the active-rally switcher — returns null if
+  /// it doesn't exist, or isn't readable (unpublished and we're not an
+  /// admin), rather than throwing, so the switcher can just skip it.
+  Future<RallySummary?> getRallySummary(String rallyId) async {
+    try {
+      final doc = await _firestore.collection('rallies').doc(rallyId).get();
+      if (!doc.exists) return null;
+      return RallySummary.fromFirestore(doc);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> createCheckpoint({
+    required String rallyId,
+    required String code,
+    required CheckpointKind kind,
+    GeoPoint? location,
+  }) {
+    return _firestore
+        .collection('rallies')
+        .doc(rallyId)
+        .collection('checkpoints')
+        .add({
+          'code': code,
+          'kind': kind.firestoreValue,
+          'location': location,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+  }
+
+  /// Sorted client-side by code — a rally's checkpoint count is small
+  /// enough that this doesn't need a server-side `.orderBy()`.
+  Stream<List<Checkpoint>> watchCheckpoints(String rallyId) {
+    return _firestore
+        .collection('rallies')
+        .doc(rallyId)
+        .collection('checkpoints')
+        .snapshots()
+        .map((snapshot) {
+          final checkpoints = snapshot.docs
+              .map(Checkpoint.fromFirestore)
+              .toList();
+          checkpoints.sort((a, b) => a.code.compareTo(b.code));
+          return checkpoints;
+        });
   }
 }

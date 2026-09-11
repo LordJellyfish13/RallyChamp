@@ -16,6 +16,7 @@ class CreateRallyCubit extends Cubit<CreateRallyState> {
     required DateTime endDate,
     required int stageCount,
     required bool publishImmediately,
+    bool allowWalkupMarshals = true,
   }) async {
     emit(const CreateRallySubmitting());
     try {
@@ -27,6 +28,7 @@ class CreateRallyCubit extends Cubit<CreateRallyState> {
         endDate: endDate,
         stageCount: stageCount,
         publishImmediately: publishImmediately,
+        allowWalkupMarshals: allowWalkupMarshals,
       );
       emit(CreateRallySuccess(rallyId));
     } catch (e) {

@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rallychamp/features/rallies/bloc/create_rally_cubit.dart';
 import 'package:rallychamp/features/rallies/bloc/create_rally_state.dart';
+import 'package:rallychamp/features/rallies/data/checkpoint.dart';
 import 'package:rallychamp/features/rallies/data/rally_repository.dart';
 import 'package:rallychamp/features/rallies/data/rally_summary.dart';
 
@@ -17,6 +19,7 @@ class _FakeRallyRepository implements RallyRepository {
     required DateTime endDate,
     required int stageCount,
     required bool publishImmediately,
+    bool allowWalkupMarshals = true,
   }) async {
     if (shouldThrow) {
       throw Exception('permission-denied');
@@ -33,11 +36,26 @@ class _FakeRallyRepository implements RallyRepository {
   Stream<List<RallySummary>> watchMyRallies() => const Stream.empty();
 
   @override
+  Future<RallySummary?> getRallySummary(String rallyId) async => null;
+
+  @override
   Future<void> publishRally({
     required String rallyId,
     required String name,
     required String description,
   }) async {}
+
+  @override
+  Future<void> createCheckpoint({
+    required String rallyId,
+    required String code,
+    required CheckpointKind kind,
+    GeoPoint? location,
+  }) async {}
+
+  @override
+  Stream<List<Checkpoint>> watchCheckpoints(String rallyId) =>
+      const Stream.empty();
 }
 
 void main() {

@@ -4,6 +4,7 @@ import '../../features/map/presentation/map_page.dart';
 import '../../features/news/presentation/news_page.dart';
 import '../../features/results/presentation/results_page.dart';
 import '../../features/status/presentation/status_page.dart';
+import '../settings/settings_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -20,6 +21,7 @@ class _MainScreenState extends State<MainScreen> {
     MapPage(),
     StatusPage(),
     ResultsPage(),
+    SettingsPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -46,6 +48,10 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.emoji_events),
             label: 'Results',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            label: 'Settings',
           ),
         ],
       ),

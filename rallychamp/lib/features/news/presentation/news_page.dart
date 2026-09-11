@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/active_rally/my_rallies_store.dart';
+import '../../../core/auth/ensure_signed_in.dart';
 import '../../applications/data/staff_role.dart';
 import '../../applications/presentation/staff_application_form.dart';
 import '../../applications/presentation/team_entry_form.dart';
@@ -27,6 +29,22 @@ class NewsPage extends StatelessWidget {
 class _NewsView extends StatelessWidget {
   const _NewsView();
 
+  Future<void> _openMyRallies(BuildContext context) async {
+    if (!await ensureSignedIn(context)) return;
+    if (!context.mounted) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const MyRalliesPage()));
+  }
+
+  Future<void> _openCreateRally(BuildContext context) async {
+    if (!await ensureSignedIn(context)) return;
+    if (!context.mounted) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const CreateRallyForm()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -39,21 +57,13 @@ class _NewsView extends StatelessWidget {
           IconButton(
             tooltip: 'My rallies',
             icon: const Icon(Icons.event_note_outlined),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const MyRalliesPage()),
-              );
-            },
+            onPressed: () => _openMyRallies(context),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Create rally',
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const CreateRallyForm()),
-          );
-        },
+        onPressed: () => _openCreateRally(context),
         child: const Icon(Icons.add),
       ),
       body: BlocBuilder<NewsCubit, NewsState>(
@@ -172,6 +182,7 @@ void _showApplySheet(BuildContext context, String rallyId, String rallyName) {
               onTap: () async {
                 Navigator.of(sheetContext).pop();
                 await cubit.followRally(rallyId);
+                await MyRalliesStore.recordVisit(rallyId);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Following this rally')),
@@ -182,28 +193,25 @@ void _showApplySheet(BuildContext context, String rallyId, String rallyName) {
             ListTile(
               leading: const Icon(Icons.shield_outlined),
               title: const Text('Marshal / Volunteer'),
-              onTap: () => _openStaffApplication(
-                sheetContext,
-                rallyId,
-                StaffRole.marshal,
-              ),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _openStaffApplication(context, rallyId, StaffRole.marshal);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.gavel_outlined),
               title: const Text('Judge'),
-              onTap: () =>
-                  _openStaffApplication(sheetContext, rallyId, StaffRole.judge),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _openStaffApplication(context, rallyId, StaffRole.judge);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.directions_car_outlined),
               title: const Text('Team / Competitor'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
-                Navigator.of(sheetContext).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => TeamEntryForm(rallyId: rallyId),
-                  ),
-                );
+                _openTeamEntry(context, rallyId);
               },
             ),
             const SizedBox(height: 8),
@@ -214,15 +222,24 @@ void _showApplySheet(BuildContext context, String rallyId, String rallyName) {
   );
 }
 
-void _openStaffApplication(
-  BuildContext sheetContext,
+Future<void> _openStaffApplication(
+  BuildContext context,
   String rallyId,
   StaffRole role,
-) {
-  Navigator.of(sheetContext).pop();
-  Navigator.of(sheetContext).push(
+) async {
+  if (!await ensureSignedIn(context)) return;
+  if (!context.mounted) return;
+  Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => StaffApplicationForm(rallyId: rallyId, role: role),
     ),
+  );
+}
+
+Future<void> _openTeamEntry(BuildContext context, String rallyId) async {
+  if (!await ensureSignedIn(context)) return;
+  if (!context.mounted) return;
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => TeamEntryForm(rallyId: rallyId)),
   );
 }

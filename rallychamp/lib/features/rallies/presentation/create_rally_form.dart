@@ -35,6 +35,7 @@ class _CreateRallyFormViewState extends State<_CreateRallyFormView> {
   DateTime? _startDate;
   DateTime? _endDate;
   bool _publishImmediately = false;
+  bool _allowWalkupMarshals = true;
 
   @override
   void dispose() {
@@ -98,6 +99,7 @@ class _CreateRallyFormViewState extends State<_CreateRallyFormView> {
       endDate: _endDate!,
       stageCount: int.parse(_stageCountController.text.trim()),
       publishImmediately: _publishImmediately,
+      allowWalkupMarshals: _allowWalkupMarshals,
     );
   }
 
@@ -205,6 +207,16 @@ class _CreateRallyFormViewState extends State<_CreateRallyFormView> {
                   ),
                   value: _publishImmediately,
                   onChanged: (v) => setState(() => _publishImmediately = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Allow walk-up marshals'),
+                  subtitle: const Text(
+                    'On = anyone who applies as a marshal while the rally '
+                    'is running is accepted immediately, no review needed',
+                  ),
+                  value: _allowWalkupMarshals,
+                  onChanged: (v) => setState(() => _allowWalkupMarshals = v),
                 ),
                 const SizedBox(height: 24),
                 FilledButton(

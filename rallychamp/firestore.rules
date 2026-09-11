@@ -43,6 +43,18 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids;
         allow update, delete: if false;
       }
+
+      // Checkpoints (viewing/parking/box points, code like "R13"). Same
+      // read visibility as stages; admins can create and edit (fixing a
+      // typo'd code shouldn't need a delete+recreate).
+      match /checkpoints/{checkpointId} {
+        allow read: if get(/databases/$(database)/documents/rallies/$(rallyId)).data.visibility == 'published'
+          || (request.auth != null
+            && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
+        allow create, update: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids;
+        allow delete: if false;
+      }
     }
 
     // Personal profile: name, phone, OIB, judge license. Self-access only
@@ -54,16 +66,43 @@ service cloud.firestore {
     }
 
     // Marshal/judge applications. Applicant can file and read their own;
-    // no update/delete yet — the organizer-review flow will add its own
-    // rule (status changes) when it's built. Admin-read is deferred for the
-    // same reason as users/{uid} above.
+    // that rally's admins can read all of them (to review) and update only
+    // status/assignedCheckpointId (to accept/reject/assign) — nothing else
+    // on the document, so an admin can't rewrite the applicant's own
+    // claimed name/phone.
+    //
+    // A marshal application (never judge) may self-submit as already
+    // 'accepted' — the walk-up-marshal case — but only if the rally is
+    // genuinely live right now and its organizer has left walk-up marshals
+    // enabled; both checked here against the real rally document, not
+    // trusted from the client. See dev_notes.md §5 "Walk-up marshals
+    // during a live rally".
     match /rallies/{rallyId}/staffApplications/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null
+        && (request.auth.uid == uid
+          || request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
+
       allow create: if request.auth != null
         && request.auth.uid == uid
-        && request.resource.data.status == 'pending'
-        && request.resource.data.roleRequested in ['marshal', 'judge'];
-      allow update, delete: if false;
+        && request.resource.data.roleRequested in ['marshal', 'judge']
+        && request.resource.data.applicantName is string
+        && request.resource.data.applicantPhone is string
+        && (
+          request.resource.data.status == 'pending'
+          || (
+            request.resource.data.status == 'accepted'
+            && request.resource.data.roleRequested == 'marshal'
+            && get(/databases/$(database)/documents/rallies/$(rallyId)).data.allowWalkupMarshals == true
+            && get(/databases/$(database)/documents/rallies/$(rallyId)).data.status in ['running', 'start', 'paused', 'lunch break']
+          )
+        );
+
+      allow update: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'assignedCheckpointId'])
+        && request.resource.data.status in ['accepted', 'rejected'];
+
+      allow delete: if false;
     }
 
     // Team/competitor entries. Public fields (car number, class, team/driver

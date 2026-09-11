@@ -7,6 +7,7 @@ import '../bloc/my_rallies_cubit.dart';
 import '../bloc/my_rallies_state.dart';
 import '../data/rally_repository.dart';
 import '../data/rally_summary.dart';
+import 'rally_detail_page.dart';
 
 class MyRalliesPage extends StatelessWidget {
   const MyRalliesPage({super.key});
@@ -33,9 +34,8 @@ class _MyRalliesView extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not publish: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Could not publish: $e')));
       }
     }
   }
@@ -50,7 +50,9 @@ class _MyRalliesView extends StatelessWidget {
             case MyRalliesLoading():
               return const Center(child: CircularProgressIndicator());
             case MyRalliesError(:final message):
-              return Center(child: Text('Could not load your rallies: $message'));
+              return Center(
+                child: Text('Could not load your rallies: $message'),
+              );
             case MyRalliesLoaded(:final rallies):
               if (rallies.isEmpty) {
                 return const Center(
@@ -64,56 +66,66 @@ class _MyRalliesView extends StatelessWidget {
                   final rally = rallies[index];
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Chip(
-                                label: Text(
-                                  rally.isDraft ? 'Draft' : 'Published',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => RallyDetailPage(rally: rally),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Chip(
+                                  label: Text(
+                                    rally.isDraft ? 'Draft' : 'Published',
+                                  ),
+                                  backgroundColor: rally.isDraft
+                                      ? AppColors.neutralTint
+                                      : AppColors.successTint,
+                                  labelStyle: TextStyle(
+                                    color: rally.isDraft
+                                        ? AppColors.inkSoft
+                                        : AppColors.success,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                backgroundColor: rally.isDraft
-                                    ? AppColors.neutralTint
-                                    : AppColors.successTint,
-                                labelStyle: TextStyle(
-                                  color: rally.isDraft
-                                      ? AppColors.inkSoft
-                                      : AppColors.success,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
+                                const Spacer(),
+                                Text(
+                                  DateFormat.yMMMd().format(rally.createdAt),
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              const Spacer(),
-                              Text(
-                                DateFormat.yMMMd().format(rally.createdAt),
-                                style: Theme.of(context).textTheme.bodySmall,
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              rally.name,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(rally.description),
+                            if (rally.isDraft) ...[
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: FilledButton.tonal(
+                                  onPressed: () => _publish(context, rally),
+                                  child: const Text('Publish'),
+                                ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            rally.name,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(rally.description),
-                          if (rally.isDraft) ...[
-                            const SizedBox(height: 12),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: FilledButton.tonal(
-                                onPressed: () => _publish(context, rally),
-                                child: const Text('Publish'),
-                              ),
-                            ),
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'core/navigation/main_screen.dart';
+import 'core/auth/auth_gate.dart';
 import 'core/theme/app_theme.dart';
 
 class RallyChampApp extends StatelessWidget {
@@ -11,7 +11,7 @@ class RallyChampApp extends StatelessWidget {
     return MaterialApp(
       title: 'RallyChamp',
       theme: AppTheme.light,
-      home: const MainScreen(),
+      home: const AuthGate(),
     );
   }
 }

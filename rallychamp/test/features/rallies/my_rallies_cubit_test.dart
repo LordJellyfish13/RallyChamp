@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rallychamp/features/rallies/bloc/my_rallies_cubit.dart';
 import 'package:rallychamp/features/rallies/bloc/my_rallies_state.dart';
+import 'package:rallychamp/features/rallies/data/checkpoint.dart';
 import 'package:rallychamp/features/rallies/data/rally_repository.dart';
 import 'package:rallychamp/features/rallies/data/rally_summary.dart';
 
@@ -19,10 +21,14 @@ class _FakeRallyRepository implements RallyRepository {
     required DateTime endDate,
     required int stageCount,
     required bool publishImmediately,
+    bool allowWalkupMarshals = true,
   }) async => 'unused';
 
   @override
   Stream<List<RallySummary>> watchMyRallies() => _controller.stream;
+
+  @override
+  Future<RallySummary?> getRallySummary(String rallyId) async => null;
 
   @override
   Future<void> publishRally({
@@ -32,6 +38,18 @@ class _FakeRallyRepository implements RallyRepository {
   }) async {
     lastPublishedId = rallyId;
   }
+
+  @override
+  Future<void> createCheckpoint({
+    required String rallyId,
+    required String code,
+    required CheckpointKind kind,
+    GeoPoint? location,
+  }) async {}
+
+  @override
+  Stream<List<Checkpoint>> watchCheckpoints(String rallyId) =>
+      const Stream.empty();
 
   void emit(List<RallySummary> rallies) => _controller.add(rallies);
   void dispose() => _controller.close();

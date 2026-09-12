@@ -67,6 +67,21 @@ class _FakeRallyRepository implements RallyRepository {
   Stream<List<Checkpoint>> watchCheckpoints(String rallyId) =>
       const Stream.empty();
 
+  @override
+  Future<void> updateCheckpoint({
+    required String rallyId,
+    required String checkpointId,
+    required String code,
+    required CheckpointKind kind,
+    GeoPoint? location,
+  }) async {}
+
+  @override
+  Future<void> deleteCheckpoint({
+    required String rallyId,
+    required String checkpointId,
+  }) async {}
+
   void emit(List<Stage> stages) => _controller.add(stages);
   void dispose() => _controller.close();
 }

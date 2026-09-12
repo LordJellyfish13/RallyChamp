@@ -168,6 +168,37 @@ class RallyRepository {
         });
   }
 
+  Future<void> updateCheckpoint({
+    required String rallyId,
+    required String checkpointId,
+    required String code,
+    required CheckpointKind kind,
+    GeoPoint? location,
+  }) {
+    return _firestore
+        .collection('rallies')
+        .doc(rallyId)
+        .collection('checkpoints')
+        .doc(checkpointId)
+        .update({
+          'code': code,
+          'kind': kind.firestoreValue,
+          'location': location,
+        });
+  }
+
+  Future<void> deleteCheckpoint({
+    required String rallyId,
+    required String checkpointId,
+  }) {
+    return _firestore
+        .collection('rallies')
+        .doc(rallyId)
+        .collection('checkpoints')
+        .doc(checkpointId)
+        .delete();
+  }
+
   /// Sorted client-side by code — a rally's checkpoint count is small
   /// enough that this doesn't need a server-side `.orderBy()`.
   Stream<List<Checkpoint>> watchCheckpoints(String rallyId) {

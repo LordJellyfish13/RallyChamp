@@ -51,15 +51,18 @@ service cloud.firestore {
       }
 
       // Checkpoints (viewing/parking/box points, code like "R13"). Same
-      // read visibility as stages; admins can create and edit (fixing a
-      // typo'd code shouldn't need a delete+recreate).
+      // read visibility as stages; admins can create, edit, and delete.
+      // A deleted checkpoint can leave a stale `assignedCheckpointId` on a
+      // staffApplications doc — acceptable for now (the review UI already
+      // resolves checkpoint names from a live watch, so a stale id just
+      // won't match anything); revisit if that proves confusing in
+      // practice.
       match /checkpoints/{checkpointId} {
         allow read: if get(/databases/$(database)/documents/rallies/$(rallyId)).data.visibility == 'published'
           || (request.auth != null
             && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
-        allow create, update: if request.auth != null
+        allow create, update, delete: if request.auth != null
           && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids;
-        allow delete: if false;
       }
     }
 

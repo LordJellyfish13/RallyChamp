@@ -13,6 +13,8 @@ import 'package:rallychamp/features/rallies/data/stage.dart';
 class _FakeRallyRepository implements RallyRepository {
   final _controller = StreamController<List<Checkpoint>>();
   Map<String, Object?>? lastCreate;
+  Map<String, Object?>? lastUpdate;
+  String? lastDeletedId;
 
   @override
   Future<void> createCheckpoint({
@@ -60,6 +62,31 @@ class _FakeRallyRepository implements RallyRepository {
 
   @override
   Stream<List<Stage>> watchStages(String rallyId) => const Stream.empty();
+
+  @override
+  Future<void> updateCheckpoint({
+    required String rallyId,
+    required String checkpointId,
+    required String code,
+    required CheckpointKind kind,
+    GeoPoint? location,
+  }) async {
+    lastUpdate = {
+      'rallyId': rallyId,
+      'checkpointId': checkpointId,
+      'code': code,
+      'kind': kind,
+      'location': location,
+    };
+  }
+
+  @override
+  Future<void> deleteCheckpoint({
+    required String rallyId,
+    required String checkpointId,
+  }) async {
+    lastDeletedId = checkpointId;
+  }
 
   @override
   Future<void> updateStageRoute({
@@ -111,6 +138,38 @@ void main() {
       expect(repo.lastCreate?['rallyId'], 'rally-1');
       expect(repo.lastCreate?['code'], 'R13');
       expect(repo.lastCreate?['location'], const GeoPoint(45.3, 14.4));
+
+      await cubit.close();
+      repo.dispose();
+    });
+
+    test('updateCheckpoint delegates to the repository', () async {
+      final repo = _FakeRallyRepository();
+      final cubit = CheckpointsCubit(repo, 'rally-1');
+
+      await cubit.updateCheckpoint(
+        checkpointId: 'c1',
+        code: 'R14',
+        kind: CheckpointKind.parking,
+        location: const GeoPoint(45.3, 14.4),
+      );
+
+      expect(repo.lastUpdate?['rallyId'], 'rally-1');
+      expect(repo.lastUpdate?['checkpointId'], 'c1');
+      expect(repo.lastUpdate?['code'], 'R14');
+      expect(repo.lastUpdate?['kind'], CheckpointKind.parking);
+
+      await cubit.close();
+      repo.dispose();
+    });
+
+    test('deleteCheckpoint delegates to the repository', () async {
+      final repo = _FakeRallyRepository();
+      final cubit = CheckpointsCubit(repo, 'rally-1');
+
+      await cubit.deleteCheckpoint('c1');
+
+      expect(repo.lastDeletedId, 'c1');
 
       await cubit.close();
       repo.dispose();

@@ -1,13 +1,14 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
-import '../../../core/location/current_position.dart';
+import '../../../core/map/app_map_interaction.dart';
 import '../bloc/checkpoints_cubit.dart';
 import '../bloc/checkpoints_state.dart';
 import '../data/checkpoint.dart';
 import '../data/rally_repository.dart';
-import 'location_picker_page.dart';
+import 'checkpoint_form_dialog.dart';
 
 class CheckpointsPage extends StatelessWidget {
   const CheckpointsPage({super.key, required this.rallyId});
@@ -23,155 +24,46 @@ class CheckpointsPage extends StatelessWidget {
   }
 }
 
+IconData _iconFor(CheckpointKind kind) {
+  return switch (kind) {
+    CheckpointKind.viewing => Icons.visibility_outlined,
+    CheckpointKind.parking => Icons.local_parking_outlined,
+    CheckpointKind.box => Icons.garage_outlined,
+  };
+}
+
 class _CheckpointsView extends StatelessWidget {
   const _CheckpointsView();
 
   Future<void> _showAddDialog(BuildContext context) async {
     final cubit = context.read<CheckpointsCubit>();
-    final codeController = TextEditingController();
-    var selectedKind = CheckpointKind.viewing;
-    GeoPoint? capturedLocation;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setState) {
-            var locating = false;
-            String? locationError;
-
-            Future<void> captureLocation() async {
-              setState(() {
-                locating = true;
-                locationError = null;
-              });
-              try {
-                final position = await currentPosition();
-                capturedLocation = GeoPoint(
-                  position.latitude,
-                  position.longitude,
-                );
-              } catch (e) {
-                locationError = '$e';
-              }
-              setState(() => locating = false);
-            }
-
-            Future<void> dropPin() async {
-              final picked = await Navigator.of(dialogContext).push<GeoPoint>(
-                MaterialPageRoute<GeoPoint>(
-                  builder: (_) =>
-                      LocationPickerPage(initialLocation: capturedLocation),
-                ),
-              );
-              if (picked != null) {
-                setState(() => capturedLocation = picked);
-              }
-            }
-
-            return AlertDialog(
-              title: const Text('Add checkpoint'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: codeController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Code',
-                      hintText: 'e.g. R13',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<CheckpointKind>(
-                    initialValue: selectedKind,
-                    decoration: const InputDecoration(labelText: 'Kind'),
-                    items: CheckpointKind.values
-                        .map(
-                          (kind) => DropdownMenuItem(
-                            value: kind,
-                            child: Text(kind.label),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => selectedKind = value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: locating ? null : captureLocation,
-                    icon: locating
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location),
-                    label: Text(
-                      capturedLocation == null
-                          ? 'Use current location'
-                          : 'Location captured',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: dropPin,
-                    icon: const Icon(Icons.edit_location_alt_outlined),
-                    label: const Text('Drop pin on map'),
-                  ),
-                  if (locationError != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      locationError!,
-                      style: Theme.of(dialogContext).textTheme.bodySmall
-                          ?.copyWith(color: Theme.of(dialogContext).colorScheme.error),
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result == true && codeController.text.trim().isNotEmpty) {
-      try {
-        await cubit.addCheckpoint(
-          code: codeController.text.trim(),
-          kind: selectedKind,
-          location: capturedLocation,
-        );
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not add checkpoint: $e')),
-          );
-        }
+    final result = await showCheckpointFormDialog(context);
+    if (result == null) return;
+    try {
+      await cubit.addCheckpoint(
+        code: result.code,
+        kind: result.kind,
+        location: result.location,
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not add checkpoint: $e')));
       }
     }
   }
 
-  IconData _iconFor(CheckpointKind kind) {
-    return switch (kind) {
-      CheckpointKind.viewing => Icons.visibility_outlined,
-      CheckpointKind.parking => Icons.local_parking_outlined,
-      CheckpointKind.box => Icons.garage_outlined,
-    };
+  void _openDetail(BuildContext context, Checkpoint checkpoint) {
+    final cubit = context.read<CheckpointsCubit>();
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _CheckpointDetailSheet(cubit: cubit, checkpoint: checkpoint);
+      },
+    );
   }
 
   @override
@@ -211,12 +103,191 @@ class _CheckpointsView extends StatelessWidget {
                             ? checkpoint.kind.label
                             : '${checkpoint.kind.label} · location set',
                       ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _openDetail(context, checkpoint),
                     ),
                   );
                 },
               );
           }
         },
+      ),
+    );
+  }
+}
+
+class _CheckpointDetailSheet extends StatelessWidget {
+  const _CheckpointDetailSheet({required this.cubit, required this.checkpoint});
+
+  final CheckpointsCubit cubit;
+  final Checkpoint checkpoint;
+
+  Future<void> _edit(BuildContext context) async {
+    final result = await showCheckpointFormDialog(
+      context,
+      title: 'Edit checkpoint',
+      submitLabel: 'Save',
+      initialCode: checkpoint.code,
+      initialKind: checkpoint.kind,
+      initialLocation: checkpoint.location,
+    );
+    if (result == null) return;
+    try {
+      await cubit.updateCheckpoint(
+        checkpointId: checkpoint.id,
+        code: result.code,
+        kind: result.kind,
+        location: result.location,
+      );
+      if (context.mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update checkpoint: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _delete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete ${checkpoint.code}?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await cubit.deleteCheckpoint(checkpoint.id);
+      if (context.mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete checkpoint: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final location = checkpoint.location;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  child: Icon(_iconFor(checkpoint.kind), color: Colors.white),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        checkpoint.code,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Chip(
+                        label: Text(checkpoint.kind.label),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (location != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 180,
+                  child: FlutterMap(
+                    options: MapOptions(
+                      initialCenter: LatLng(location.latitude, location.longitude),
+                      initialZoom: 15,
+                      interactionOptions: appMapInteractionOptions,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.rallychamp',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(location.latitude, location.longitude),
+                            width: 32,
+                            height: 32,
+                            child: Icon(
+                              _iconFor(checkpoint.kind),
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Text(
+                'No location set yet.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _edit(context),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    onPressed: () => _delete(context),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

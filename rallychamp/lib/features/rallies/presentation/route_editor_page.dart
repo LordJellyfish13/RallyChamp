@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -8,17 +9,23 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/location/current_position.dart';
 import '../../../core/map/app_map_interaction.dart';
+import '../bloc/checkpoints_cubit.dart';
 import '../bloc/stages_cubit.dart';
 import '../data/stage.dart';
+import 'checkpoint_form_dialog.dart';
 
 /// Draws or records a stage's route — see dev_notes.md §5 "Route creation":
 /// tap points on the map to trace one manually, or record it live with GPS
 /// while walking/driving the stage. Both add to the same working list of
-/// points, saved together via "Save route". Expects a `StagesCubit` above
-/// it in the tree (pushed from `StagesPage`, which already provides one).
+/// points, saved together via "Save route". Long-pressing a placed point
+/// (or the "mark last point" button) also lets you turn it straight into a
+/// checkpoint without leaving this screen — see "Marking checkpoints while
+/// drawing a route". Expects `StagesCubit` and `CheckpointsCubit` above it
+/// in the tree (pushed from `StagesPage`, which already provides both).
 class RouteEditorPage extends StatefulWidget {
-  const RouteEditorPage({super.key, required this.stage});
+  const RouteEditorPage({super.key, required this.rallyId, required this.stage});
 
+  final String rallyId;
   final Stage stage;
 
   @override
@@ -27,6 +34,7 @@ class RouteEditorPage extends StatefulWidget {
 
 class _RouteEditorPageState extends State<RouteEditorPage> {
   late final List<LatLng> _route = List.of(widget.stage.route);
+  final _markedAsCheckpoint = <int>{};
   StreamSubscription<Position>? _recordingSubscription;
   String? _recordingError;
   bool _saving = false;
@@ -44,7 +52,10 @@ class _RouteEditorPageState extends State<RouteEditorPage> {
     setState(() => _route.add(point));
   }
 
-  void _undo() => setState(() => _route.removeLast());
+  void _undo() => setState(() {
+    _route.removeLast();
+    _markedAsCheckpoint.remove(_route.length);
+  });
 
   Future<void> _clear() async {
     final confirmed = await showDialog<bool>(
@@ -64,7 +75,12 @@ class _RouteEditorPageState extends State<RouteEditorPage> {
         ],
       ),
     );
-    if (confirmed == true) setState(_route.clear);
+    if (confirmed == true) {
+      setState(() {
+        _route.clear();
+        _markedAsCheckpoint.clear();
+      });
+    }
   }
 
   Future<void> _toggleRecording() async {
@@ -124,6 +140,36 @@ class _RouteEditorPageState extends State<RouteEditorPage> {
     }
   }
 
+  Future<void> _markCheckpoint(int index) async {
+    final point = _route[index];
+    final result = await showCheckpointFormDialog(
+      context,
+      title: 'Mark checkpoint',
+      submitLabel: 'Mark',
+      showLocationCapture: false,
+      initialLocation: GeoPoint(point.latitude, point.longitude),
+    );
+    if (result == null || !mounted) return;
+    try {
+      await context.read<CheckpointsCubit>().addCheckpoint(
+        code: result.code,
+        kind: result.kind,
+        location: result.location,
+      );
+      if (!mounted) return;
+      setState(() => _markedAsCheckpoint.add(index));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${result.code} added as a checkpoint')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add checkpoint: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final canEdit = !_recording && !_saving;
@@ -165,54 +211,87 @@ class _RouteEditorPageState extends State<RouteEditorPage> {
               _recording
                   ? 'Recording — walk or drive the stage. '
                         '${_route.length} points so far.'
-                  : 'Tap the map to add a point, or record it live with GPS.',
+                  : 'Tap the map to add a point, or record it live with GPS. '
+                        'Long-press a point to mark it as a checkpoint.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
           Expanded(
-            child: FlutterMap(
-              options: MapOptions(
-                initialCenter: _route.isNotEmpty
-                    ? _route.first
-                    : appFallbackMapCenter,
-                initialZoom: _route.isNotEmpty ? 15 : 8,
-                interactionOptions: appMapInteractionOptions,
-                onTap: (_, point) => _addPoint(point),
-              ),
+            child: Stack(
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.rallychamp',
-                ),
-                if (_route.length > 1)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: _route,
-                        color: Theme.of(context).colorScheme.primary,
-                        strokeWidth: 4,
-                      ),
-                    ],
+                FlutterMap(
+                  options: MapOptions(
+                    initialCenter: _route.isNotEmpty
+                        ? _route.first
+                        : appFallbackMapCenter,
+                    initialZoom: _route.isNotEmpty ? 15 : 8,
+                    interactionOptions: appMapInteractionOptions,
+                    onTap: (_, point) => _addPoint(point),
                   ),
-                MarkerLayer(
-                  markers: [
-                    for (final (index, point) in _route.indexed)
-                      Marker(
-                        point: point,
-                        width: 16,
-                        height: 16,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _pointColor(context, index),
-                            border: Border.all(color: Colors.white, width: 2),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.rallychamp',
+                    ),
+                    if (_route.length > 1)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: _route,
+                            color: Theme.of(context).colorScheme.primary,
+                            strokeWidth: 4,
                           ),
-                        ),
+                        ],
                       ),
+                    MarkerLayer(
+                      markers: [
+                        for (final (index, point) in _route.indexed)
+                          Marker(
+                            point: point,
+                            width: 24,
+                            height: 24,
+                            child: GestureDetector(
+                              onLongPress: canEdit
+                                  ? () => _markCheckpoint(index)
+                                  : null,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _pointColor(context, index),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: _markedAsCheckpoint.contains(index)
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 14,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SimpleAttributionWidget(
+                      source: Text('OpenStreetMap contributors'),
+                    ),
                   ],
                 ),
-                const SimpleAttributionWidget(
-                  source: Text('OpenStreetMap contributors'),
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: FloatingActionButton.small(
+                    heroTag: 'markLastAsCheckpoint',
+                    tooltip: 'Mark last point as checkpoint',
+                    onPressed: canEdit && _route.isNotEmpty
+                        ? () => _markCheckpoint(_route.length - 1)
+                        : null,
+                    child: const Icon(Icons.add_location_alt_outlined),
+                  ),
                 ),
               ],
             ),

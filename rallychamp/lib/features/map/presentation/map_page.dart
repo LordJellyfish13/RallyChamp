@@ -100,11 +100,19 @@ class _RallyMapView extends StatelessWidget {
   }
 }
 
-class _RallyMap extends StatelessWidget {
+class _RallyMap extends StatefulWidget {
   const _RallyMap({required this.checkpoints, required this.routes});
 
   final List<Checkpoint> checkpoints;
   final List<List<LatLng>> routes;
+
+  @override
+  State<_RallyMap> createState() => _RallyMapState();
+}
+
+class _RallyMapState extends State<_RallyMap> {
+  var _visibleKinds = CheckpointKind.values.toSet();
+  var _showRoutes = true;
 
   IconData _iconFor(CheckpointKind kind) {
     return switch (kind) {
@@ -116,6 +124,11 @@ class _RallyMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final checkpoints = widget.checkpoints
+        .where((c) => _visibleKinds.contains(c.kind))
+        .toList();
+    final routes = _showRoutes ? widget.routes : const <List<LatLng>>[];
+
     final checkpointPoints = checkpoints
         .map((c) => LatLng(c.location!.latitude, c.location!.longitude))
         .toList();
@@ -123,6 +136,30 @@ class _RallyMap extends StatelessWidget {
       ...checkpointPoints,
       for (final route in routes) ...route,
     ];
+
+    if (allPoints.isEmpty) {
+      return Stack(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(
+              child: Text(
+                'Nothing matches the current filter.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          _FilterButton(
+            visibleKinds: _visibleKinds,
+            showRoutes: _showRoutes,
+            onChanged: (kinds, showRoutes) => setState(() {
+              _visibleKinds = kinds;
+              _showRoutes = showRoutes;
+            }),
+          ),
+        ],
+      );
+    }
 
     // CameraFit.bounds degenerates on a zero-size box (everything at one
     // distinct point — only possible here with a single checkpoint and no
@@ -143,50 +180,62 @@ class _RallyMap extends StatelessWidget {
             interactionOptions: appMapInteractionOptions,
           );
 
-    return FlutterMap(
-      options: options,
+    return Stack(
       children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.rallychamp',
-        ),
-        if (routes.isNotEmpty)
-          PolylineLayer(
-            polylines: [
-              for (final route in routes)
-                Polyline(
-                  points: route,
-                  color: Theme.of(context).colorScheme.primary,
-                  strokeWidth: 4,
-                ),
-            ],
-          ),
-        MarkerLayer(
-          markers: [
-            for (final checkpoint in checkpoints)
-              Marker(
-                point: LatLng(
-                  checkpoint.location!.latitude,
-                  checkpoint.location!.longitude,
-                ),
-                width: 40,
-                height: 40,
-                child: GestureDetector(
-                  onTap: () => _showCheckpointSheet(context, checkpoint),
-                  child: CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    child: Icon(
-                      _iconFor(checkpoint.kind),
-                      color: Colors.white,
-                      size: 20,
+        FlutterMap(
+          options: options,
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.rallychamp',
+            ),
+            if (routes.isNotEmpty)
+              PolylineLayer(
+                polylines: [
+                  for (final route in routes)
+                    Polyline(
+                      points: route,
+                      color: Theme.of(context).colorScheme.primary,
+                      strokeWidth: 4,
+                    ),
+                ],
+              ),
+            MarkerLayer(
+              markers: [
+                for (final checkpoint in checkpoints)
+                  Marker(
+                    point: LatLng(
+                      checkpoint.location!.latitude,
+                      checkpoint.location!.longitude,
+                    ),
+                    width: 40,
+                    height: 40,
+                    child: GestureDetector(
+                      onTap: () => _showCheckpointSheet(context, checkpoint),
+                      child: CircleAvatar(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        child: Icon(
+                          _iconFor(checkpoint.kind),
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
+              ],
+            ),
+            const SimpleAttributionWidget(
+              source: Text('OpenStreetMap contributors'),
+            ),
           ],
         ),
-        const SimpleAttributionWidget(
-          source: Text('OpenStreetMap contributors'),
+        _FilterButton(
+          visibleKinds: _visibleKinds,
+          showRoutes: _showRoutes,
+          onChanged: (kinds, showRoutes) => setState(() {
+            _visibleKinds = kinds;
+            _showRoutes = showRoutes;
+          }),
         ),
       ],
     );
@@ -260,5 +309,91 @@ class _RallyMap extends StatelessWidget {
       '&destination=${location.latitude},${location.longitude}',
     );
     return launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
+
+/// Floating "layers" button overlaid on the map — opens a sheet to toggle
+/// which checkpoint kinds and the route are shown. Lives on the map itself
+/// rather than the AppBar so it doesn't need `MapPage`'s own state to know
+/// whether there's anything to filter yet.
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({
+    required this.visibleKinds,
+    required this.showRoutes,
+    required this.onChanged,
+  });
+
+  final Set<CheckpointKind> visibleKinds;
+  final bool showRoutes;
+  final void Function(Set<CheckpointKind> kinds, bool showRoutes) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 16,
+      right: 16,
+      child: FloatingActionButton.small(
+        heroTag: 'mapFilter',
+        tooltip: 'Filter map',
+        onPressed: () => _openSheet(context),
+        child: const Icon(Icons.layers_outlined),
+      ),
+    );
+  }
+
+  void _openSheet(BuildContext context) {
+    var kinds = Set.of(visibleKinds);
+    var routes = showRoutes;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Show on map',
+                      style: Theme.of(sheetContext).textTheme.titleMedium,
+                    ),
+                    for (final kind in CheckpointKind.values)
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(kind.label),
+                        value: kinds.contains(kind),
+                        onChanged: (checked) {
+                          setState(() {
+                            if (checked ?? false) {
+                              kinds.add(kind);
+                            } else {
+                              kinds.remove(kind);
+                            }
+                          });
+                          onChanged(kinds, routes);
+                        },
+                      ),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Route'),
+                      value: routes,
+                      onChanged: (checked) {
+                        setState(() => routes = checked ?? false);
+                        onChanged(kinds, routes);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

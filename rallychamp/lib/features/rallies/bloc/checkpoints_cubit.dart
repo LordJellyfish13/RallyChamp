@@ -33,6 +33,28 @@ class CheckpointsCubit extends Cubit<CheckpointsState> {
     );
   }
 
+  Future<void> updateCheckpoint({
+    required String checkpointId,
+    required String code,
+    required CheckpointKind kind,
+    GeoPoint? location,
+  }) {
+    return _repository.updateCheckpoint(
+      rallyId: rallyId,
+      checkpointId: checkpointId,
+      code: code,
+      kind: kind,
+      location: location,
+    );
+  }
+
+  Future<void> deleteCheckpoint(String checkpointId) {
+    return _repository.deleteCheckpoint(
+      rallyId: rallyId,
+      checkpointId: checkpointId,
+    );
+  }
+
   @override
   Future<void> close() {
     _subscription.cancel();

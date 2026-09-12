@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../bloc/checkpoints_cubit.dart';
 import '../bloc/stages_cubit.dart';
 import '../bloc/stages_state.dart';
 import '../data/rally_repository.dart';
@@ -13,15 +14,25 @@ class StagesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => StagesCubit(RallyRepository(), rallyId),
-      child: const _StagesView(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => StagesCubit(RallyRepository(), rallyId)),
+        // Route editing can also mark a route point as a checkpoint — see
+        // dev_notes.md §5 "Marking checkpoints while drawing a route" —
+        // so this cubit is provided here too, alongside stages.
+        BlocProvider(
+          create: (_) => CheckpointsCubit(RallyRepository(), rallyId),
+        ),
+      ],
+      child: _StagesView(rallyId: rallyId),
     );
   }
 }
 
 class _StagesView extends StatelessWidget {
-  const _StagesView();
+  const _StagesView({required this.rallyId});
+
+  final String rallyId;
 
   @override
   Widget build(BuildContext context) {
@@ -57,9 +68,19 @@ class _StagesView extends StatelessWidget {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => BlocProvider.value(
-                              value: context.read<StagesCubit>(),
-                              child: RouteEditorPage(stage: stage),
+                            builder: (_) => MultiBlocProvider(
+                              providers: [
+                                BlocProvider.value(
+                                  value: context.read<StagesCubit>(),
+                                ),
+                                BlocProvider.value(
+                                  value: context.read<CheckpointsCubit>(),
+                                ),
+                              ],
+                              child: RouteEditorPage(
+                                rallyId: rallyId,
+                                stage: stage,
+                              ),
                             ),
                           ),
                         );

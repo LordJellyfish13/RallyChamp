@@ -100,6 +100,14 @@ class _MyRalliesView extends StatelessWidget {
                                   materialTapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                 ),
+                                // A draft's real-world lifecycle bucket is
+                                // always "Upcoming" — redundant with the
+                                // Draft chip above, so only show this once
+                                // the rally is actually published.
+                                if (!rally.isDraft) ...[
+                                  const SizedBox(width: 6),
+                                  _StatusChip(status: rally.displayStatus),
+                                ],
                                 const Spacer(),
                                 Text(
                                   DateFormat.yMMMd().format(rally.createdAt),
@@ -134,6 +142,38 @@ class _MyRalliesView extends StatelessWidget {
           }
         },
       ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final RallyDisplayStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (background, foreground) = switch (status) {
+      RallyDisplayStatus.upcoming => (
+        AppColors.neutralTint,
+        AppColors.inkSoft,
+      ),
+      RallyDisplayStatus.active => (AppColors.successTint, AppColors.success),
+      RallyDisplayStatus.finished => (
+        AppColors.primaryTint,
+        AppColors.primaryDark,
+      ),
+    };
+    return Chip(
+      label: Text(status.label),
+      backgroundColor: background,
+      labelStyle: TextStyle(
+        color: foreground,
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+      ),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 }

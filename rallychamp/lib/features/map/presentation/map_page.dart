@@ -15,6 +15,7 @@ import '../../rallies/bloc/stages_cubit.dart';
 import '../../rallies/bloc/stages_state.dart';
 import '../../rallies/data/checkpoint.dart';
 import '../../rallies/data/rally_repository.dart';
+import '../../rallies/data/stage.dart';
 
 class MapPage extends StatelessWidget {
   const MapPage({super.key});
@@ -69,14 +70,11 @@ class _RallyMapView extends StatelessWidget {
 
         return BlocBuilder<StagesCubit, StagesState>(
           builder: (context, stagesState) {
-            final routes = stagesState is StagesLoaded
-                ? stagesState.stages
-                      .map((s) => s.route)
-                      .where((route) => route.length > 1)
-                      .toList()
-                : const <List<LatLng>>[];
+            final stages = stagesState is StagesLoaded
+                ? stagesState.stages.where((s) => s.route.length > 1).toList()
+                : const <Stage>[];
 
-            if (checkpoints.isEmpty && routes.isEmpty) {
+            if (checkpoints.isEmpty && stages.isEmpty) {
               if (checkpointsState is CheckpointsLoading ||
                   stagesState is StagesLoading) {
                 return const Center(child: CircularProgressIndicator());
@@ -92,7 +90,7 @@ class _RallyMapView extends StatelessWidget {
                 ),
               );
             }
-            return _RallyMap(checkpoints: checkpoints, routes: routes);
+            return _RallyMap(checkpoints: checkpoints, stages: stages);
           },
         );
       },
@@ -101,10 +99,12 @@ class _RallyMapView extends StatelessWidget {
 }
 
 class _RallyMap extends StatefulWidget {
-  const _RallyMap({required this.checkpoints, required this.routes});
+  const _RallyMap({required this.checkpoints, required this.stages});
 
   final List<Checkpoint> checkpoints;
-  final List<List<LatLng>> routes;
+
+  /// Only stages with a real (>1 point) route — see `_RallyMapView`.
+  final List<Stage> stages;
 
   @override
   State<_RallyMap> createState() => _RallyMapState();
@@ -112,7 +112,16 @@ class _RallyMap extends StatefulWidget {
 
 class _RallyMapState extends State<_RallyMap> {
   var _visibleKinds = CheckpointKind.values.toSet();
-  var _showRoutes = true;
+
+  // Tracks hidden stages, not visible ones — checkpoints and stages load
+  // from two independent Firestore streams, so `widget.stages` can still
+  // be empty on `_RallyMap`'s first build if the stages stream just
+  // hasn't delivered yet (checkpoints already had data, so the "still
+  // loading" screen wasn't shown). A "visible by default" set computed
+  // once up front would lock in that transient empty list forever; a
+  // "hidden" set starts empty either way, so a stage is visible the
+  // moment it exists, regardless of which stream won the race.
+  var _hiddenStageIds = <String>{};
 
   IconData _iconFor(CheckpointKind kind) {
     return switch (kind) {
@@ -127,14 +136,16 @@ class _RallyMapState extends State<_RallyMap> {
     final checkpoints = widget.checkpoints
         .where((c) => _visibleKinds.contains(c.kind))
         .toList();
-    final routes = _showRoutes ? widget.routes : const <List<LatLng>>[];
+    final stages = widget.stages
+        .where((s) => !_hiddenStageIds.contains(s.id))
+        .toList();
 
     final checkpointPoints = checkpoints
         .map((c) => LatLng(c.location!.latitude, c.location!.longitude))
         .toList();
     final allPoints = [
       ...checkpointPoints,
-      for (final route in routes) ...route,
+      for (final stage in stages) ...stage.route,
     ];
 
     if (allPoints.isEmpty) {
@@ -151,10 +162,11 @@ class _RallyMapState extends State<_RallyMap> {
           ),
           _FilterButton(
             visibleKinds: _visibleKinds,
-            showRoutes: _showRoutes,
-            onChanged: (kinds, showRoutes) => setState(() {
+            stages: widget.stages,
+            hiddenStageIds: _hiddenStageIds,
+            onChanged: (kinds, stageIds) => setState(() {
               _visibleKinds = kinds;
-              _showRoutes = showRoutes;
+              _hiddenStageIds = stageIds;
             }),
           ),
         ],
@@ -189,12 +201,12 @@ class _RallyMapState extends State<_RallyMap> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.example.rallychamp',
             ),
-            if (routes.isNotEmpty)
+            if (stages.isNotEmpty)
               PolylineLayer(
                 polylines: [
-                  for (final route in routes)
+                  for (final stage in stages)
                     Polyline(
-                      points: route,
+                      points: stage.route,
                       color: Theme.of(context).colorScheme.primary,
                       strokeWidth: 4,
                     ),
@@ -222,6 +234,39 @@ class _RallyMapState extends State<_RallyMap> {
                       ),
                     ),
                   ),
+                for (final stage in stages) ...[
+                  Marker(
+                    point: stage.route.first,
+                    width: 32,
+                    height: 32,
+                    child: GestureDetector(
+                      onTap: () => _showStageEndSnackBar(context, stage, 'Start'),
+                      child: const CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Colors.green,
+                        child: Icon(Icons.flag, color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ),
+                  Marker(
+                    point: stage.route.last,
+                    width: 32,
+                    height: 32,
+                    child: GestureDetector(
+                      onTap: () =>
+                          _showStageEndSnackBar(context, stage, 'Finish'),
+                      child: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                        child: const Icon(
+                          Icons.sports_score,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SimpleAttributionWidget(
@@ -231,14 +276,21 @@ class _RallyMapState extends State<_RallyMap> {
         ),
         _FilterButton(
           visibleKinds: _visibleKinds,
-          showRoutes: _showRoutes,
-          onChanged: (kinds, showRoutes) => setState(() {
+          stages: widget.stages,
+          hiddenStageIds: _hiddenStageIds,
+          onChanged: (kinds, stageIds) => setState(() {
             _visibleKinds = kinds;
-            _showRoutes = showRoutes;
+            _hiddenStageIds = stageIds;
           }),
         ),
       ],
     );
+  }
+
+  void _showStageEndSnackBar(BuildContext context, Stage stage, String end) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${stage.name} — $end')));
   }
 
   void _showCheckpointSheet(BuildContext context, Checkpoint checkpoint) {
@@ -313,19 +365,23 @@ class _RallyMapState extends State<_RallyMap> {
 }
 
 /// Floating "layers" button overlaid on the map — opens a sheet to toggle
-/// which checkpoint kinds and the route are shown. Lives on the map itself
-/// rather than the AppBar so it doesn't need `MapPage`'s own state to know
-/// whether there's anything to filter yet.
+/// which checkpoint kinds are shown, plus one checkbox per stage's route
+/// (each also hides that stage's Start/Finish markers). Lives on the map
+/// itself rather than the AppBar so it doesn't need `MapPage`'s own state
+/// to know whether there's anything to filter yet.
 class _FilterButton extends StatelessWidget {
   const _FilterButton({
     required this.visibleKinds,
-    required this.showRoutes,
+    required this.stages,
+    required this.hiddenStageIds,
     required this.onChanged,
   });
 
   final Set<CheckpointKind> visibleKinds;
-  final bool showRoutes;
-  final void Function(Set<CheckpointKind> kinds, bool showRoutes) onChanged;
+  final List<Stage> stages;
+  final Set<String> hiddenStageIds;
+  final void Function(Set<CheckpointKind> kinds, Set<String> hiddenStageIds)
+  onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -343,7 +399,7 @@ class _FilterButton extends StatelessWidget {
 
   void _openSheet(BuildContext context) {
     var kinds = Set.of(visibleKinds);
-    var routes = showRoutes;
+    var stageIds = Set<String>.of(hiddenStageIds);
 
     showModalBottomSheet<void>(
       context: context,
@@ -375,18 +431,33 @@ class _FilterButton extends StatelessWidget {
                               kinds.remove(kind);
                             }
                           });
-                          onChanged(kinds, routes);
+                          onChanged(kinds, stageIds);
                         },
                       ),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Route'),
-                      value: routes,
-                      onChanged: (checked) {
-                        setState(() => routes = checked ?? false);
-                        onChanged(kinds, routes);
-                      },
-                    ),
+                    if (stages.isNotEmpty) ...[
+                      const Divider(height: 24),
+                      Text(
+                        'Routes',
+                        style: Theme.of(sheetContext).textTheme.labelLarge,
+                      ),
+                      for (final stage in stages)
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(stage.name),
+                          subtitle: const Text('Route + start/finish'),
+                          value: !stageIds.contains(stage.id),
+                          onChanged: (checked) {
+                            setState(() {
+                              if (checked ?? false) {
+                                stageIds.remove(stage.id);
+                              } else {
+                                stageIds.add(stage.id);
+                              }
+                            });
+                            onChanged(kinds, stageIds);
+                          },
+                        ),
+                    ],
                   ],
                 ),
               ),

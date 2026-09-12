@@ -6,11 +6,6 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/location/current_position.dart';
 import '../../../core/map/app_map_interaction.dart';
 
-/// Croatia's rough center — used only as a last-resort starting point when
-/// GPS isn't available (services off, permission denied); the pin is
-/// freely draggable afterwards regardless, so this never blocks anyone.
-const _fallbackCenter = LatLng(45.1, 15.2);
-
 /// Lets someone place a checkpoint (or, later, a route point) by panning
 /// the map under a fixed center pin, Google-Maps-picker style, rather than
 /// standing at the spot with GPS. A secondary option next to "use current
@@ -21,7 +16,7 @@ class LocationPickerPage extends StatefulWidget {
 
   /// Where to start the pin — an already-captured location when editing,
   /// otherwise null to start from the device's current GPS position (or
-  /// [_fallbackCenter] if that's unavailable).
+  /// [appFallbackMapCenter] if that's unavailable).
   final GeoPoint? initialLocation;
 
   @override
@@ -30,7 +25,7 @@ class LocationPickerPage extends StatefulWidget {
 
 class _LocationPickerPageState extends State<LocationPickerPage> {
   late LatLng _center = widget.initialLocation == null
-      ? _fallbackCenter
+      ? appFallbackMapCenter
       : LatLng(widget.initialLocation!.latitude, widget.initialLocation!.longitude);
   final _mapController = MapController();
 

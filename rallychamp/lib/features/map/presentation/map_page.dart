@@ -5,12 +5,14 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/active_rally/active_rally_cubit.dart';
-import '../../../core/map/app_map_interaction.dart';
 import '../../../core/active_rally/active_rally_state.dart';
 import '../../../core/active_rally/active_rally_switcher.dart';
 import '../../../core/active_rally/no_active_rally.dart';
+import '../../../core/map/app_map_interaction.dart';
 import '../../rallies/bloc/checkpoints_cubit.dart';
 import '../../rallies/bloc/checkpoints_state.dart';
+import '../../rallies/bloc/stages_cubit.dart';
+import '../../rallies/bloc/stages_state.dart';
 import '../../rallies/data/checkpoint.dart';
 import '../../rallies/data/rally_repository.dart';
 
@@ -28,9 +30,16 @@ class MapPage extends StatelessWidget {
             if (state is! ActiveRallyLoaded || state.active == null) {
               return const NoActiveRally();
             }
-            return BlocProvider(
-              create: (_) =>
-                  CheckpointsCubit(RallyRepository(), state.active!.id),
+            final rallyId = state.active!.id;
+            return MultiBlocProvider(
+              providers: [
+                BlocProvider(
+                  create: (_) => CheckpointsCubit(RallyRepository(), rallyId),
+                ),
+                BlocProvider(
+                  create: (_) => StagesCubit(RallyRepository(), rallyId),
+                ),
+              ],
               child: const _RallyMapView(),
             );
           },
@@ -46,40 +55,56 @@ class _RallyMapView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<CheckpointsCubit, CheckpointsState>(
-      builder: (context, state) {
-        switch (state) {
-          case CheckpointsLoading():
-            return const Center(child: CircularProgressIndicator());
-          case CheckpointsError(:final message):
-            return Center(child: Text('Could not load the map: $message'));
-          case CheckpointsLoaded(:final checkpoints):
-            final located = checkpoints
-                .where((c) => c.location != null)
-                .toList();
-            if (located.isEmpty) {
+      builder: (context, checkpointsState) {
+        if (checkpointsState is CheckpointsError) {
+          return Center(
+            child: Text('Could not load the map: ${checkpointsState.message}'),
+          );
+        }
+        final checkpoints = checkpointsState is CheckpointsLoaded
+            ? checkpointsState.checkpoints
+                  .where((c) => c.location != null)
+                  .toList()
+            : const <Checkpoint>[];
+
+        return BlocBuilder<StagesCubit, StagesState>(
+          builder: (context, stagesState) {
+            final routes = stagesState is StagesLoaded
+                ? stagesState.stages
+                      .map((s) => s.route)
+                      .where((route) => route.length > 1)
+                      .toList()
+                : const <List<LatLng>>[];
+
+            if (checkpoints.isEmpty && routes.isEmpty) {
+              if (checkpointsState is CheckpointsLoading ||
+                  stagesState is StagesLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
               return const Padding(
                 padding: EdgeInsets.all(24),
                 child: Center(
                   child: Text(
-                    "This rally's checkpoints don't have a location set "
-                    'yet. The organizer can add one from the Checkpoints '
-                    'page.',
+                    "This rally doesn't have a checkpoint location or "
+                    'route set up yet.',
                     textAlign: TextAlign.center,
                   ),
                 ),
               );
             }
-            return _CheckpointsMap(checkpoints: located);
-        }
+            return _RallyMap(checkpoints: checkpoints, routes: routes);
+          },
+        );
       },
     );
   }
 }
 
-class _CheckpointsMap extends StatelessWidget {
-  const _CheckpointsMap({required this.checkpoints});
+class _RallyMap extends StatelessWidget {
+  const _RallyMap({required this.checkpoints, required this.routes});
 
   final List<Checkpoint> checkpoints;
+  final List<List<LatLng>> routes;
 
   IconData _iconFor(CheckpointKind kind) {
     return switch (kind) {
@@ -91,24 +116,28 @@ class _CheckpointsMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final points = checkpoints
+    final checkpointPoints = checkpoints
         .map((c) => LatLng(c.location!.latitude, c.location!.longitude))
         .toList();
+    final allPoints = [
+      ...checkpointPoints,
+      for (final route in routes) ...route,
+    ];
 
-    // CameraFit.bounds degenerates on a zero-size box (a single checkpoint,
-    // or several at the same spot) — the resulting zoom comes out infinite
-    // and flutter_map silently falls back to its own placeholder center
-    // (Kyiv). Center on the point directly instead whenever there's only
-    // one distinct location to show.
-    final MapOptions options = points.length == 1
+    // CameraFit.bounds degenerates on a zero-size box (everything at one
+    // distinct point — only possible here with a single checkpoint and no
+    // route, since a rendered route always has >1 point) — the resulting
+    // zoom comes out infinite and flutter_map silently falls back to its
+    // own placeholder center (Kyiv). Center on the point directly instead.
+    final MapOptions options = allPoints.length == 1
         ? MapOptions(
-            initialCenter: points.first,
+            initialCenter: allPoints.first,
             initialZoom: 15,
             interactionOptions: appMapInteractionOptions,
           )
         : MapOptions(
             initialCameraFit: CameraFit.bounds(
-              bounds: LatLngBounds.fromPoints(points),
+              bounds: LatLngBounds.fromPoints(allPoints),
               padding: const EdgeInsets.all(48),
             ),
             interactionOptions: appMapInteractionOptions,
@@ -121,6 +150,17 @@ class _CheckpointsMap extends StatelessWidget {
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.example.rallychamp',
         ),
+        if (routes.isNotEmpty)
+          PolylineLayer(
+            polylines: [
+              for (final route in routes)
+                Polyline(
+                  points: route,
+                  color: Theme.of(context).colorScheme.primary,
+                  strokeWidth: 4,
+                ),
+            ],
+          ),
         MarkerLayer(
           markers: [
             for (final checkpoint in checkpoints)

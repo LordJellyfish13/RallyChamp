@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../applications/presentation/applications_review_page.dart';
 import '../data/rally_summary.dart';
 import 'checkpoints_page.dart';
+import 'stages_page.dart';
 
 /// Organizer hub for a single rally: checkpoints and application review.
 class RallyDetailPage extends StatelessWidget {
@@ -29,6 +30,22 @@ class RallyDetailPage extends StatelessWidget {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => CheckpointsPage(rallyId: rally.id),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.route_outlined),
+              title: const Text('Stages & routes'),
+              subtitle: const Text('Draw or record each stage\'s route'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => StagesPage(rallyId: rally.id),
                   ),
                 );
               },

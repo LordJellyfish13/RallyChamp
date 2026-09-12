@@ -3,16 +3,32 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:rallychamp/features/rallies/bloc/my_rallies_cubit.dart';
-import 'package:rallychamp/features/rallies/bloc/my_rallies_state.dart';
+import 'package:rallychamp/features/rallies/bloc/stages_cubit.dart';
+import 'package:rallychamp/features/rallies/bloc/stages_state.dart';
 import 'package:rallychamp/features/rallies/data/checkpoint.dart';
 import 'package:rallychamp/features/rallies/data/rally_repository.dart';
 import 'package:rallychamp/features/rallies/data/rally_summary.dart';
 import 'package:rallychamp/features/rallies/data/stage.dart';
 
 class _FakeRallyRepository implements RallyRepository {
-  final _controller = StreamController<List<RallySummary>>();
-  String? lastPublishedId;
+  final _controller = StreamController<List<Stage>>();
+  Map<String, Object?>? lastSavedRoute;
+
+  @override
+  Stream<List<Stage>> watchStages(String rallyId) => _controller.stream;
+
+  @override
+  Future<void> updateStageRoute({
+    required String rallyId,
+    required String stageId,
+    required List<LatLng> route,
+  }) async {
+    lastSavedRoute = {
+      'rallyId': rallyId,
+      'stageId': stageId,
+      'route': route,
+    };
+  }
 
   @override
   Future<String> createRally({
@@ -27,7 +43,7 @@ class _FakeRallyRepository implements RallyRepository {
   }) async => 'unused';
 
   @override
-  Stream<List<RallySummary>> watchMyRallies() => _controller.stream;
+  Stream<List<RallySummary>> watchMyRallies() => const Stream.empty();
 
   @override
   Future<RallySummary?> getRallySummary(String rallyId) async => null;
@@ -37,9 +53,7 @@ class _FakeRallyRepository implements RallyRepository {
     required String rallyId,
     required String name,
     required String description,
-  }) async {
-    lastPublishedId = rallyId;
-  }
+  }) async {}
 
   @override
   Future<void> createCheckpoint({
@@ -53,62 +67,48 @@ class _FakeRallyRepository implements RallyRepository {
   Stream<List<Checkpoint>> watchCheckpoints(String rallyId) =>
       const Stream.empty();
 
-  @override
-  Stream<List<Stage>> watchStages(String rallyId) => const Stream.empty();
-
-  @override
-  Future<void> updateStageRoute({
-    required String rallyId,
-    required String stageId,
-    required List<LatLng> route,
-  }) async {}
-
-  void emit(List<RallySummary> rallies) => _controller.add(rallies);
+  void emit(List<Stage> stages) => _controller.add(stages);
   void dispose() => _controller.close();
 }
 
-RallySummary _summary({String id = 'r1', bool draft = true}) {
-  return RallySummary(
-    id: id,
-    name: 'Šumska Rally',
-    description: 'A fun one',
-    visibility: draft ? 'draft' : 'published',
-    status: 'setup',
-    createdAt: DateTime(2026, 1, 1),
-  );
-}
-
 void main() {
-  group('MyRalliesCubit', () {
+  group('StagesCubit', () {
     test('starts loading', () async {
       final repo = _FakeRallyRepository();
-      final cubit = MyRalliesCubit(repo);
-      expect(cubit.state, isA<MyRalliesLoading>());
+      final cubit = StagesCubit(repo, 'rally-1');
+      expect(cubit.state, isA<StagesLoading>());
       await cubit.close();
       repo.dispose();
     });
 
-    test('emits MyRalliesLoaded when the repository stream emits', () async {
+    test('emits StagesLoaded when the repository stream emits', () async {
       final repo = _FakeRallyRepository();
-      final cubit = MyRalliesCubit(repo);
+      final cubit = StagesCubit(repo, 'rally-1');
 
-      repo.emit([_summary()]);
+      repo.emit([
+        const Stage(id: 's1', name: 'Main stage', order: 0, route: []),
+      ]);
       await Future<void>.delayed(Duration.zero);
 
-      expect(cubit.state, isA<MyRalliesLoaded>());
-      expect((cubit.state as MyRalliesLoaded).rallies, hasLength(1));
+      expect(cubit.state, isA<StagesLoaded>());
+      expect((cubit.state as StagesLoaded).stages, hasLength(1));
 
       await cubit.close();
       repo.dispose();
     });
 
-    test('publishRally delegates to the repository', () async {
+    test('saveRoute delegates to the repository', () async {
       final repo = _FakeRallyRepository();
-      final cubit = MyRalliesCubit(repo);
+      final cubit = StagesCubit(repo, 'rally-1');
 
-      await cubit.publishRally(_summary(id: 'r42'));
+      await cubit.saveRoute(
+        stageId: 's1',
+        route: const [LatLng(45.3, 14.4), LatLng(45.31, 14.41)],
+      );
 
-      expect(repo.lastPublishedId, 'r42');
+      expect(repo.lastSavedRoute?['rallyId'], 'rally-1');
+      expect(repo.lastSavedRoute?['stageId'], 's1');
+      expect(repo.lastSavedRoute?['route'], hasLength(2));
 
       await cubit.close();
       repo.dispose();

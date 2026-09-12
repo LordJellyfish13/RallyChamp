@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:rallychamp/core/active_rally/active_rally_cubit.dart';
 import 'package:rallychamp/core/active_rally/active_rally_state.dart';
 import 'package:rallychamp/core/active_rally/my_rallies_store.dart';
 import 'package:rallychamp/features/rallies/data/checkpoint.dart';
 import 'package:rallychamp/features/rallies/data/rally_repository.dart';
 import 'package:rallychamp/features/rallies/data/rally_summary.dart';
+import 'package:rallychamp/features/rallies/data/stage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeRallyRepository implements RallyRepository {
@@ -14,6 +16,16 @@ class _FakeRallyRepository implements RallyRepository {
   @override
   Future<RallySummary?> getRallySummary(String rallyId) async =>
       summaries[rallyId];
+
+  @override
+  Stream<List<Stage>> watchStages(String rallyId) => const Stream.empty();
+
+  @override
+  Future<void> updateStageRoute({
+    required String rallyId,
+    required String stageId,
+    required List<LatLng> route,
+  }) async {}
 
   @override
   Future<String> createRally({

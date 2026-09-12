@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'checkpoint.dart';
 import 'rally_summary.dart';
+import 'stage.dart';
 
 class RallyRepository {
   RallyRepository({FirebaseFirestore? firestore, FirebaseAuth? auth})
@@ -180,6 +182,44 @@ class RallyRepository {
               .toList();
           checkpoints.sort((a, b) => a.code.compareTo(b.code));
           return checkpoints;
+        });
+  }
+
+  /// Sorted client-side by `order` — a rally's stage count is small enough
+  /// that this doesn't need a server-side `.orderBy()`.
+  Stream<List<Stage>> watchStages(String rallyId) {
+    return _firestore
+        .collection('rallies')
+        .doc(rallyId)
+        .collection('stages')
+        .snapshots()
+        .map((snapshot) {
+          final stages = snapshot.docs.map(Stage.fromFirestore).toList();
+          stages.sort((a, b) => a.order.compareTo(b.order));
+          return stages;
+        });
+  }
+
+  /// Overwrites a stage's route — either from manually dropped points or a
+  /// GPS recording (see dev_notes.md §5 "Route creation"). Stored as plain
+  /// `{lat, lng}` maps, matching the schema `createRally` already writes
+  /// (an empty list of the same shape), not `GeoPoint` — unlike checkpoint
+  /// locations, this predates this feature and there was no reason to
+  /// change it.
+  Future<void> updateStageRoute({
+    required String rallyId,
+    required String stageId,
+    required List<LatLng> route,
+  }) {
+    return _firestore
+        .collection('rallies')
+        .doc(rallyId)
+        .collection('stages')
+        .doc(stageId)
+        .update({
+          'route': route
+              .map((p) => {'lat': p.latitude, 'lng': p.longitude})
+              .toList(),
         });
   }
 }

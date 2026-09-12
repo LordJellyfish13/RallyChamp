@@ -41,7 +41,13 @@ service cloud.firestore {
             && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
         allow create: if request.auth != null
           && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids;
-        allow update, delete: if false;
+        // Route drawing/recording (dev_notes.md §5 "Route creation") is the
+        // only stage edit built so far, so this is deliberately narrow —
+        // an admin can only touch `route`, nothing else on the document.
+        allow update: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['route']);
+        allow delete: if false;
       }
 
       // Checkpoints (viewing/parking/box points, code like "R13"). Same

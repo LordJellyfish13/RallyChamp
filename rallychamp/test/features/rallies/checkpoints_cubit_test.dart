@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:rallychamp/features/rallies/bloc/checkpoints_cubit.dart';
 import 'package:rallychamp/features/rallies/bloc/checkpoints_state.dart';
 import 'package:rallychamp/features/rallies/data/checkpoint.dart';
 import 'package:rallychamp/features/rallies/data/rally_repository.dart';
 import 'package:rallychamp/features/rallies/data/rally_summary.dart';
+import 'package:rallychamp/features/rallies/data/stage.dart';
 
 class _FakeRallyRepository implements RallyRepository {
   final _controller = StreamController<List<Checkpoint>>();
@@ -54,6 +56,16 @@ class _FakeRallyRepository implements RallyRepository {
     required String rallyId,
     required String name,
     required String description,
+  }) async {}
+
+  @override
+  Stream<List<Stage>> watchStages(String rallyId) => const Stream.empty();
+
+  @override
+  Future<void> updateStageRoute({
+    required String rallyId,
+    required String stageId,
+    required List<LatLng> route,
   }) async {}
 
   void emit(List<Checkpoint> checkpoints) => _controller.add(checkpoints);

@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:rallychamp/features/rallies/bloc/create_rally_cubit.dart';
 import 'package:rallychamp/features/rallies/bloc/create_rally_state.dart';
 import 'package:rallychamp/features/rallies/data/checkpoint.dart';
 import 'package:rallychamp/features/rallies/data/rally_repository.dart';
 import 'package:rallychamp/features/rallies/data/rally_summary.dart';
+import 'package:rallychamp/features/rallies/data/stage.dart';
 
 class _FakeRallyRepository implements RallyRepository {
   bool shouldThrow = false;
@@ -56,6 +58,16 @@ class _FakeRallyRepository implements RallyRepository {
   @override
   Stream<List<Checkpoint>> watchCheckpoints(String rallyId) =>
       const Stream.empty();
+
+  @override
+  Stream<List<Stage>> watchStages(String rallyId) => const Stream.empty();
+
+  @override
+  Future<void> updateStageRoute({
+    required String rallyId,
+    required String stageId,
+    required List<LatLng> route,
+  }) async {}
 }
 
 void main() {

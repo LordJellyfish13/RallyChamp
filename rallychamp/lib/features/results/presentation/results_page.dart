@@ -20,6 +20,9 @@ class ResultsPage extends StatelessWidget {
         ),
         body: BlocBuilder<ActiveRallyCubit, ActiveRallyState>(
           builder: (context, state) {
+            if (state is ActiveRallyLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
             if (state is! ActiveRallyLoaded || state.active == null) {
               return const NoActiveRally();
             }

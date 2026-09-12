@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -9,6 +11,8 @@ import '../../../core/active_rally/active_rally_state.dart';
 import '../../../core/active_rally/active_rally_switcher.dart';
 import '../../../core/active_rally/no_active_rally.dart';
 import '../../../core/map/app_map_interaction.dart';
+import '../../../core/map/tile_downloader.dart';
+import '../../../core/map/tile_math.dart';
 import '../../rallies/bloc/checkpoints_cubit.dart';
 import '../../rallies/bloc/checkpoints_state.dart';
 import '../../rallies/bloc/stages_cubit.dart';
@@ -28,6 +32,9 @@ class MapPage extends StatelessWidget {
         appBar: AppBar(title: const ActiveRallySwitcher(fallbackTitle: 'Map')),
         body: BlocBuilder<ActiveRallyCubit, ActiveRallyState>(
           builder: (context, state) {
+            if (state is ActiveRallyLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
             if (state is! ActiveRallyLoaded || state.active == null) {
               return const NoActiveRally();
             }
@@ -169,6 +176,10 @@ class _RallyMapState extends State<_RallyMap> {
               _hiddenStageIds = stageIds;
             }),
           ),
+          _DownloadOfflineButton(
+            checkpoints: widget.checkpoints,
+            stages: widget.stages,
+          ),
         ],
       );
     }
@@ -282,6 +293,10 @@ class _RallyMapState extends State<_RallyMap> {
             _visibleKinds = kinds;
             _hiddenStageIds = stageIds;
           }),
+        ),
+        _DownloadOfflineButton(
+          checkpoints: widget.checkpoints,
+          stages: widget.stages,
         ),
       ],
     );
@@ -465,6 +480,166 @@ class _FilterButton extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+/// Floating "download for offline use" button — pre-fetches every map tile
+/// covering the rally's checkpoints and routes (the *full* set, regardless
+/// of the current filter — "download for offline use" should mean the
+/// whole rally, not just whatever's currently checked) so the map keeps
+/// working with no signal. See dev_notes.md §5 "Offline tile caching".
+class _DownloadOfflineButton extends StatelessWidget {
+  const _DownloadOfflineButton({required this.checkpoints, required this.stages});
+
+  final List<Checkpoint> checkpoints;
+  final List<Stage> stages;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 72,
+      right: 16,
+      child: FloatingActionButton.small(
+        heroTag: 'downloadOffline',
+        tooltip: 'Download for offline use',
+        onPressed: () => _startDownload(context),
+        child: const Icon(Icons.download_for_offline_outlined),
+      ),
+    );
+  }
+
+  Future<void> _startDownload(BuildContext context) async {
+    final points = [
+      for (final checkpoint in checkpoints)
+        if (checkpoint.location != null)
+          LatLng(checkpoint.location!.latitude, checkpoint.location!.longitude),
+      for (final stage in stages) ...stage.route,
+    ];
+    if (points.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Nothing to download yet — add a checkpoint location or "
+            'route first.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final bounds = points.length == 1
+        ? LatLngBounds(points.first, points.first)
+        : LatLngBounds.fromPoints(points);
+    final tileCount = tilesForBounds(
+      bounds,
+      minZoom: offlineDownloadMinZoom,
+      maxZoom: offlineDownloadMaxZoom,
+    ).length;
+    final estimatedMb = (tileCount * 15 / 1024).ceil();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Download for offline use?'),
+        content: Text(
+          'This downloads about $tileCount map tiles (roughly $estimatedMb '
+          'MB) so the map keeps working with no signal.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final result = await showDialog<TileDownloadProgress>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DownloadProgressDialog(
+        progressStream: downloadTilesForOfflineUse(bounds),
+      ),
+    );
+    if (context.mounted && result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.failed == 0
+                ? 'Downloaded ${result.completed} tiles for offline use.'
+                : 'Downloaded ${result.completed - result.failed} tiles; '
+                      '${result.failed} failed — check your connection.',
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _DownloadProgressDialog extends StatefulWidget {
+  const _DownloadProgressDialog({required this.progressStream});
+
+  final Stream<TileDownloadProgress> progressStream;
+
+  @override
+  State<_DownloadProgressDialog> createState() =>
+      _DownloadProgressDialogState();
+}
+
+class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
+  StreamSubscription<TileDownloadProgress>? _subscription;
+  TileDownloadProgress? _progress;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = widget.progressStream.listen((progress) {
+      if (!mounted) return;
+      setState(() => _progress = progress);
+      if (progress.isDone) Navigator.of(context).pop(progress);
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _progress;
+    return AlertDialog(
+      title: const Text('Downloading map tiles'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LinearProgressIndicator(
+            value: progress == null || progress.total == 0
+                ? null
+                : progress.completed / progress.total,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            progress == null
+                ? 'Starting…'
+                : '${progress.completed} / ${progress.total} tiles',
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_progress),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

@@ -140,13 +140,30 @@ class RallyRepository {
   /// A single rally by id, for the active-rally switcher — returns null if
   /// it doesn't exist, or isn't readable (unpublished and we're not an
   /// admin), rather than throwing, so the switcher can just skip it.
+  ///
+  /// Falls back to an explicit cache-only read when the network attempt
+  /// fails or is slow: a cold app start with no signal doesn't give the
+  /// default server-then-cache `get()` a prior failed request to know it's
+  /// offline from, so instead of failing fast it can sit for a long time
+  /// before giving up on the network and throwing `unavailable` — and
+  /// either way, quietly serving the (perfectly good) cached copy would
+  /// otherwise make the whole active-rally switcher, and everything
+  /// downstream of it (the Map tab most of all), look empty/stuck despite
+  /// the rally being fully cached.
   Future<RallySummary?> getRallySummary(String rallyId) async {
+    final ref = _firestore.collection('rallies').doc(rallyId);
     try {
-      final doc = await _firestore.collection('rallies').doc(rallyId).get();
+      final doc = await ref.get().timeout(const Duration(seconds: 3));
       if (!doc.exists) return null;
       return RallySummary.fromFirestore(doc);
     } catch (_) {
-      return null;
+      try {
+        final cached = await ref.get(const GetOptions(source: Source.cache));
+        if (!cached.exists) return null;
+        return RallySummary.fromFirestore(cached);
+      } catch (_) {
+        return null;
+      }
     }
   }
 

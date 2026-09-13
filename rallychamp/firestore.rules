@@ -7,6 +7,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helpers for the incident rules below. The older rules inline the
+    // same `get()` checks; they're left alone rather than refactored,
+    // since rewriting working security rules for tidiness is a bad trade.
+    function isRallyAdmin(rallyId) {
+      return request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids;
+    }
+
+    // An accepted marshal or judge on this rally — the same "look up my
+    // own staffApplications doc" check the People roster introduced.
+    function isAcceptedStaff(rallyId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/rallies/$(rallyId)/staffApplications/$(request.auth.uid))
+        && get(/databases/$(database)/documents/rallies/$(rallyId)/staffApplications/$(request.auth.uid)).data.status == 'accepted';
+    }
+
     // News feed: publicly readable (guest access, no login required).
     // Created either by the rally-publish flow (rallyId set, checked against
     // that rally's adminUids) — no other client write path yet.
@@ -41,13 +57,104 @@ service cloud.firestore {
             && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
         allow create: if request.auth != null
           && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids;
-        // Route drawing/recording (dev_notes.md §5 "Route creation") is the
-        // only stage edit built so far, so this is deliberately narrow —
-        // an admin can only touch `route`, nothing else on the document.
+        // Still deliberately narrow: an admin can touch the route (drawing
+        // and recording, dev_notes.md §5 "Route creation"), the stage's
+        // own status, and its published length and start time — but not
+        // its name, order or id, which the activity log has already frozen
+        // into past entries.
+        // The status value is checked here rather than trusted from the
+        // client, so a stage can't end up in a state no screen renders.
         allow update: if request.auth != null
           && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['route']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['route', 'status', 'distanceKm', 'scheduledStart'])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+            || request.resource.data.status in ['scheduled', 'running', 'finished', 'cancelled']
+          );
         allow delete: if false;
+      }
+
+      // Activity log — the Status page's event feed (dev_notes.md §5
+      // "Rally activity log"). Same public-read visibility as stages and
+      // checkpoints: spectators watching the Status page are exactly who
+      // this is for, per the guest-access model in §3.
+      //
+      // Append-only in substance: an admin can *retract* an entry (mark it
+      // withdrawn after a mis-tap) but can never rewrite what it said, when
+      // it happened, or make it disappear — `retractedAt`/`retractedBy` are
+      // the only keys an update may touch, and delete stays denied to
+      // everyone. Crossing a line out in the logbook, not tearing the page
+      // out; once incident reports share this feed it's a safety record,
+      // and a record that can be quietly rewritten is worth nothing.
+      //
+      // v1 only admins write (status changes). When incident reporting
+      // lands, this create rule also opens to accepted staff — the same
+      // `get()` on the requester's own staffApplications doc the People
+      // roster already uses — and the incident's sensitive detail stays in
+      // a separate `incidents/{id}` document, because rules are
+      // per-document and a softened public row can't share a document with
+      // the private version of itself (dev_notes.md §9).
+      match /events/{eventId} {
+        allow read: if get(/databases/$(database)/documents/rallies/$(rallyId)).data.visibility == 'published'
+          || (request.auth != null
+            && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
+        // Admins log status changes; accepted staff can log the incident
+        // rows that accompany a report they're allowed to file below.
+        allow create: if isRallyAdmin(rallyId)
+          || (isAcceptedStaff(rallyId)
+            && request.resource.data.type in ['incident_opened', 'incident_resolved']);
+        allow update: if isRallyAdmin(rallyId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['retractedAt', 'retractedBy'])
+          && request.resource.data.retractedBy == request.auth.uid;
+        allow delete: if false;
+      }
+
+      // Incident reports — the detail behind a public `events` row. Only
+      // the rally's staff and organizers can read these: the public row
+      // deliberately says something vaguer ("Incident reported near R1"),
+      // because a crash shouldn't be broadcast in detail to spectators
+      // before anyone has confirmed the crew is alright. Rules are
+      // per-document, which is exactly why this is a separate document
+      // from the row that announces it (dev_notes.md §9).
+      match /incidents/{incidentId} {
+        allow read: if isRallyAdmin(rallyId) || isAcceptedStaff(rallyId);
+        // Reporting is staff-only on purpose: a spectator may well see a
+        // crash first, but anonymous strangers able to fire a loud alert
+        // at everyone following a rally is the spam vector we're avoiding.
+        allow create: if (isRallyAdmin(rallyId) || isAcceptedStaff(rallyId))
+          && request.resource.data.reporterUid == request.auth.uid
+          && request.resource.data.status == 'open';
+        // Dispatching is the organizer's call, and only the status fields
+        // can move — nobody gets to rewrite what was reported.
+        allow update: if isRallyAdmin(rallyId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'resolvedAt', 'resolvedBy'])
+          && request.resource.data.status in ['open', 'responding', 'resolved'];
+        allow delete: if false;
+      }
+
+      // Stage times. Public on a published rally — spectators reading
+      // these is the entire point, and §5 wants the app to replace the
+      // organizer's results website as where people go. Written only by
+      // the rally's organizers: per §5 the radio call-ins are aggregated
+      // by one race-control person who types them in, rather than every
+      // checkpoint logging cars itself.
+      match /results/{resultId} {
+        allow read: if get(/databases/$(database)/documents/rallies/$(rallyId)).data.visibility == 'published'
+          || isRallyAdmin(rallyId);
+        // Delete is allowed, unlike the activity log: a time typed against
+        // the wrong car is the one mistake overwriting can't fix, and a
+        // phantom crew would otherwise sit in the standings permanently.
+        allow write: if isRallyAdmin(rallyId);
+      }
+
+      // "This event has already been pushed" markers, written by the push
+      // endpoint so a retry can't alert everyone twice. Deny-all for
+      // clients: the endpoint uses a service account, which bypasses these
+      // rules entirely. Kept in their own collection rather than as a
+      // field on the event so the log itself stays genuinely immutable.
+      match /pushes/{eventId} {
+        allow read, write: if false;
       }
 
       // Checkpoints (viewing/parking/box points, code like "R13"). Same
@@ -78,7 +185,14 @@ service cloud.firestore {
     // that rally's admins can read all of them (to review) and update only
     // status/assignedCheckpointId (to accept/reject/assign) — nothing else
     // on the document, so an admin can't rewrite the applicant's own
-    // claimed name/phone.
+    // claimed name/phone. An *accepted* doc is also readable by any other
+    // accepted staff member of the same rally — powers the People roster,
+    // which any marshal/judge on the rally can see, not just organizers
+    // (see dev_notes.md §5 "People screen + on-duty assignment banner").
+    // The People query is scoped to `where('status', '==', 'accepted')`
+    // client-side to match: a `list` fails entirely if any matched
+    // document doesn't satisfy the rule, so the query and the rule have to
+    // agree on that filter.
     //
     // A marshal application (never judge) may self-submit as already
     // 'accepted' — the walk-up-marshal case — but only if the rally is
@@ -89,7 +203,11 @@ service cloud.firestore {
     match /rallies/{rallyId}/staffApplications/{uid} {
       allow read: if request.auth != null
         && (request.auth.uid == uid
-          || request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
+          || request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids
+          || (
+            resource.data.status == 'accepted'
+            && get(/databases/$(database)/documents/rallies/$(rallyId)/staffApplications/$(request.auth.uid)).data.status == 'accepted'
+          ));
 
       allow create: if request.auth != null
         && request.auth.uid == uid
@@ -119,17 +237,45 @@ service cloud.firestore {
     // meant to be public per dev_notes.md §5 — or always visible to that
     // rally's admins. Contact info stays in the private subdoc, self-access
     // only.
-    match /rallies/{rallyId}/entries/{uid} {
+    // Entry documents have auto-ids, not the entrant's uid: a team can run
+    // more than one car, and keying by account allowed only one entry per
+    // person per rally. Ownership is the `uid` *field*, checked here —
+    // which is also what lets the private subdocument below identify its
+    // owner without a `get()` on the parent (impossible mid-batch).
+    match /rallies/{rallyId}/entries/{entryId} {
       allow read: if get(/databases/$(database)/documents/rallies/$(rallyId)).data.visibility == 'published'
         || (request.auth != null
           && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
       allow create: if request.auth != null
-        && request.auth.uid == uid
+        && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'pending';
-      allow update, delete: if false;
+      // Organizers accept or reject an entry, and can touch nothing else —
+      // same narrow-update pattern as staffApplications, so an admin can't
+      // quietly rewrite a competitor's car number or class.
+      allow update: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['accepted', 'rejected'];
+      allow delete: if false;
 
+      // Phone and OIB. Readable by the entrant and by that rally's
+      // organizers — the latter is what §9 always intended ("admin-only")
+      // and the first implementation was stricter than: an organizer has
+      // to be able to reach a competitor. It stays a separate document
+      // because the entry itself is publicly readable once the rally is
+      // published, and rules are per-document, so contact details could
+      // never have lived on it (§9, and §3 on OIB).
+      // The `|| request.auth.uid == entryId` clauses keep entries created
+      // before auto-ids — whose document id *is* the owner's uid and which
+      // carry no `uid` field — readable and writable by their owner.
       match /private/{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read: if request.auth != null
+          && (resource.data.uid == request.auth.uid
+            || request.auth.uid == entryId
+            || request.auth.uid in get(/databases/$(database)/documents/rallies/$(rallyId)).data.adminUids);
+        allow write: if request.auth != null
+          && (request.resource.data.uid == request.auth.uid
+            || request.auth.uid == entryId);
       }
     }
 

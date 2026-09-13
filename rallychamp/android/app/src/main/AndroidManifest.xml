@@ -3,6 +3,11 @@
          and (later) recording a stage's route — see dev_notes.md §5. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Android 13+ made notifications a runtime permission. Declaring it
+         here is only half the job: it still has to be requested at runtime,
+         which the app does when someone follows a rally rather than on a
+         cold launch — see core/notifications/notifications.dart. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="rallychamp"
         android:name="${applicationName}"
@@ -29,6 +34,14 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Where a pushed notification lands if the sender doesn't name a
+             channel. Deliberately the quiet one: anything that should
+             actually interrupt someone has to say so explicitly, so a
+             mistake errs toward silence rather than buzzing every
+             spectator. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="rally_status" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

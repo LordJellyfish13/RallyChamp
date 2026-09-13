@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/active_rally/my_rallies_store.dart';
 import '../../../core/auth/ensure_signed_in.dart';
+import '../../../core/notifications/notifications.dart';
 import '../../applications/data/staff_role.dart';
 import '../../applications/presentation/staff_application_form.dart';
 import '../../applications/presentation/team_entry_form.dart';
@@ -181,11 +182,24 @@ void _showApplySheet(BuildContext context, String rallyId, String rallyName) {
               subtitle: const Text('Follow this rally for live alerts'),
               onTap: () async {
                 Navigator.of(sheetContext).pop();
+                // Asked here rather than at launch: "follow this rally for
+                // live alerts" is the one moment where the prompt explains
+                // itself. Following still works if they say no — they just
+                // won't get pushed alerts, and the rally still shows up on
+                // their Map/Status tabs.
+                final allowed = await ensureNotificationPermission();
                 await cubit.followRally(rallyId);
                 await MyRalliesStore.recordVisit(rallyId);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Following this rally')),
+                    SnackBar(
+                      content: Text(
+                        allowed
+                            ? 'Following this rally'
+                            : 'Following this rally — turn on notifications '
+                                  'in Settings to get alerts',
+                      ),
+                    ),
                   );
                 }
               },

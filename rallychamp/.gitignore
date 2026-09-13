@@ -49,3 +49,11 @@ app.*.map.json
 
 # Internal working notes (not part of the submitted project)
 dev_notes.md
+
+# Push endpoint. The service-account key is a master key to the whole
+# Firebase project — it lives in a Wrangler secret, never in the repo.
+# These patterns are a safety net in case one gets downloaded in here.
+push-endpoint/node_modules/
+push-endpoint/.wrangler/
+**/serviceAccount*.json
+**/*-firebase-adminsdk-*.json

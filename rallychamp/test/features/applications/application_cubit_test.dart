@@ -2,10 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rallychamp/features/applications/bloc/application_cubit.dart';
 import 'package:rallychamp/features/applications/bloc/application_state.dart';
 import 'package:rallychamp/features/applications/data/applications_repository.dart';
-import 'package:rallychamp/features/applications/data/staff_application_summary.dart';
 import 'package:rallychamp/features/applications/data/staff_role.dart';
 
-class _FakeApplicationsRepository implements ApplicationsRepository {
+class _FakeApplicationsRepository extends Fake implements ApplicationsRepository {
   bool shouldThrow = false;
   Map<String, Object?>? lastSubmission;
 
@@ -41,18 +40,6 @@ class _FakeApplicationsRepository implements ApplicationsRepository {
     lastSubmission = {'rallyId': rallyId, 'teamName': teamName};
   }
 
-  @override
-  Stream<List<StaffApplicationSummary>> watchStaffApplications(
-    String rallyId,
-  ) => const Stream.empty();
-
-  @override
-  Future<void> reviewStaffApplication({
-    required String rallyId,
-    required String uid,
-    required bool accept,
-    String? assignedCheckpointId,
-  }) async {}
 }
 
 void main() {

@@ -32,4 +32,19 @@ void main() {
       expect(_summary('stopped').displayStatus, RallyDisplayStatus.finished);
     });
   });
+
+  group('rallyStatusLabel', () {
+    test('labels every known status', () {
+      expect(rallyStatusLabel('setup'), 'Setup');
+      expect(rallyStatusLabel('start'), 'Start');
+      expect(rallyStatusLabel('running'), 'Running');
+      expect(rallyStatusLabel('paused'), 'Paused');
+      expect(rallyStatusLabel('lunch break'), 'Lunch break');
+      expect(rallyStatusLabel('stopped'), 'Stopped');
+    });
+
+    test('falls back to the raw value for anything unknown', () {
+      expect(rallyStatusLabel('mystery'), 'mystery');
+    });
+  });
 }

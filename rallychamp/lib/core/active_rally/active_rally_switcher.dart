@@ -58,7 +58,7 @@ class ActiveRallySwitcher extends StatelessWidget {
               for (final rally in rallies)
                 ListTile(
                   title: Text(rally.name),
-                  subtitle: Text(rally.status),
+                  subtitle: Text(rallyStatusLabel(rally.status)),
                   trailing: rally.id == activeId
                       ? const Icon(Icons.check)
                       : null,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/location/current_position.dart';
 import '../data/checkpoint.dart';
+import '../data/stage.dart';
 import 'location_picker_page.dart';
 
 /// What a [showCheckpointFormDialog] submission collected — the caller
@@ -12,11 +13,13 @@ class CheckpointFormResult {
     required this.code,
     required this.kind,
     required this.location,
+    this.stageId,
   });
 
   final String code;
   final CheckpointKind kind;
   final GeoPoint? location;
+  final String? stageId;
 }
 
 /// The add/edit checkpoint form — shared by `CheckpointsPage` (add and
@@ -32,8 +35,25 @@ Future<CheckpointFormResult?> showCheckpointFormDialog(
   CheckpointKind initialKind = CheckpointKind.viewing,
   GeoPoint? initialLocation,
   bool showLocationCapture = true,
+  List<Stage> stages = const [],
+  List<Checkpoint> existingCheckpoints = const [],
+  String? initialStageId,
 }) async {
-  final codeController = TextEditingController(text: initialCode);
+  var selectedStageId =
+      initialStageId ?? (stages.isEmpty ? null : stages.first.id);
+
+  // Rally checkpoints run in sequences and each stage restarts the
+  // numbering, so the suggestion only ever looks at the selected stage's
+  // own codes — otherwise a three-stage rally would suggest R7 for a
+  // stage that only has R1 and R2.
+  String? suggestionFor(String? stageId) => nextCheckpointCode(
+    existingCheckpoints
+        .where((checkpoint) => checkpoint.stageId == stageId)
+        .map((checkpoint) => checkpoint.code),
+  );
+
+  var suggested = initialCode ?? suggestionFor(selectedStageId);
+  final codeController = TextEditingController(text: suggested);
   var selectedKind = initialKind;
   var location = initialLocation;
 
@@ -74,6 +94,34 @@ Future<CheckpointFormResult?> showCheckpointFormDialog(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (stages.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedStageId,
+                    decoration: const InputDecoration(labelText: 'Stage'),
+                    items: stages
+                        .map(
+                          (stage) => DropdownMenuItem(
+                            value: stage.id,
+                            child: Text(stage.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        selectedStageId = value;
+                        // Re-suggests only while the field still holds the
+                        // last suggestion — once someone types their own
+                        // code, switching stage must not overwrite it.
+                        if (codeController.text == (suggested ?? '')) {
+                          suggested = suggestionFor(value);
+                          codeController.text = suggested ?? '';
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 TextField(
                   controller: codeController,
                   autofocus: true,
@@ -155,5 +203,6 @@ Future<CheckpointFormResult?> showCheckpointFormDialog(
     code: codeController.text.trim(),
     kind: selectedKind,
     location: location,
+    stageId: selectedStageId,
   );
 }

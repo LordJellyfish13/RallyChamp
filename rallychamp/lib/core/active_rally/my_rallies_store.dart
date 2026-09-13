@@ -24,4 +24,16 @@ class MyRalliesStore {
     ids.insert(0, rallyId);
     await prefs.setStringList(_key, ids);
   }
+
+  /// Stops following [rallyId] on this device. Local-only, like the rest of
+  /// this store: it doesn't withdraw a staff application or an entry (those
+  /// are real commitments to the organizer, and dropping them silently
+  /// because someone tidied their rally list would be wrong) — it only
+  /// stops the rally appearing in the switcher.
+  static Future<void> forget(String rallyId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final ids = prefs.getStringList(_key) ?? <String>[];
+    ids.remove(rallyId);
+    await prefs.setStringList(_key, ids);
+  }
 }

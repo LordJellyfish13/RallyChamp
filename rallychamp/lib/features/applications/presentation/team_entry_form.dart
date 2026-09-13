@@ -43,11 +43,40 @@ class _TeamEntryFormViewState extends State<_TeamEntryFormView> {
   final _phoneController = TextEditingController();
   final _oibController = TextEditingController();
 
+  /// What the driver-name field started as — see the identical field on
+  /// `StaffApplicationForm` for why this needs tracking separately from
+  /// the fields that simply start empty.
+  String _authDisplayName = '';
+
   @override
   void initState() {
     super.initState();
-    final user = AuthRepository().currentUser;
-    _driverNameController.text = user?.displayName ?? '';
+    _authDisplayName = AuthRepository().currentUser?.displayName ?? '';
+    _driverNameController.text = _authDisplayName;
+    _loadProfile();
+  }
+
+  /// Prefills phone/OIB from `users/{uid}` — written there by a staff
+  /// application or a team entry to *any* rally, so a club's second entry
+  /// of the season shouldn't mean retyping contact details the app was
+  /// already given. See `StaffApplicationForm._loadProfile` for the same
+  /// pattern and the reasoning behind each guard; team name, co-driver,
+  /// car number and class stay untouched here because they're specific to
+  /// this entry, not the driver's standing profile.
+  Future<void> _loadProfile() async {
+    final profile = await ApplicationsRepository().getMyProfile();
+    if (!mounted || profile == null) return;
+    setState(() {
+      if (profile.name != null && _driverNameController.text == _authDisplayName) {
+        _driverNameController.text = profile.name!;
+      }
+      if (_phoneController.text.isEmpty && profile.phone != null) {
+        _phoneController.text = profile.phone!;
+      }
+      if (_oibController.text.isEmpty && profile.oib != null) {
+        _oibController.text = profile.oib!;
+      }
+    });
   }
 
   @override

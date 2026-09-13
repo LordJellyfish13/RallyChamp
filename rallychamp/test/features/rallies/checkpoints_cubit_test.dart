@@ -2,15 +2,12 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:rallychamp/features/rallies/bloc/checkpoints_cubit.dart';
 import 'package:rallychamp/features/rallies/bloc/checkpoints_state.dart';
 import 'package:rallychamp/features/rallies/data/checkpoint.dart';
 import 'package:rallychamp/features/rallies/data/rally_repository.dart';
-import 'package:rallychamp/features/rallies/data/rally_summary.dart';
-import 'package:rallychamp/features/rallies/data/stage.dart';
 
-class _FakeRallyRepository implements RallyRepository {
+class _FakeRallyRepository extends Fake implements RallyRepository {
   final _controller = StreamController<List<Checkpoint>>();
   Map<String, Object?>? lastCreate;
   Map<String, Object?>? lastUpdate;
@@ -21,6 +18,7 @@ class _FakeRallyRepository implements RallyRepository {
     required String rallyId,
     required String code,
     required CheckpointKind kind,
+    String? stageId,
     GeoPoint? location,
   }) async {
     lastCreate = {
@@ -36,39 +34,12 @@ class _FakeRallyRepository implements RallyRepository {
       _controller.stream;
 
   @override
-  Future<String> createRally({
-    required String name,
-    required String description,
-    required String locationName,
-    required DateTime startDate,
-    required DateTime endDate,
-    required int stageCount,
-    required bool publishImmediately,
-    bool allowWalkupMarshals = true,
-  }) async => 'unused';
-
-  @override
-  Stream<List<RallySummary>> watchMyRallies() => const Stream.empty();
-
-  @override
-  Future<RallySummary?> getRallySummary(String rallyId) async => null;
-
-  @override
-  Future<void> publishRally({
-    required String rallyId,
-    required String name,
-    required String description,
-  }) async {}
-
-  @override
-  Stream<List<Stage>> watchStages(String rallyId) => const Stream.empty();
-
-  @override
   Future<void> updateCheckpoint({
     required String rallyId,
     required String checkpointId,
     required String code,
     required CheckpointKind kind,
+    String? stageId,
     GeoPoint? location,
   }) async {
     lastUpdate = {
@@ -87,13 +58,6 @@ class _FakeRallyRepository implements RallyRepository {
   }) async {
     lastDeletedId = checkpointId;
   }
-
-  @override
-  Future<void> updateStageRoute({
-    required String rallyId,
-    required String stageId,
-    required List<LatLng> route,
-  }) async {}
 
   void emit(List<Checkpoint> checkpoints) => _controller.add(checkpoints);
   void dispose() => _controller.close();

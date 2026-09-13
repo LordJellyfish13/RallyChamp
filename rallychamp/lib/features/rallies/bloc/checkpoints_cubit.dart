@@ -23,12 +23,14 @@ class CheckpointsCubit extends Cubit<CheckpointsState> {
   Future<void> addCheckpoint({
     required String code,
     required CheckpointKind kind,
+    String? stageId,
     GeoPoint? location,
   }) {
     return _repository.createCheckpoint(
       rallyId: rallyId,
       code: code,
       kind: kind,
+      stageId: stageId,
       location: location,
     );
   }
@@ -37,6 +39,7 @@ class CheckpointsCubit extends Cubit<CheckpointsState> {
     required String checkpointId,
     required String code,
     required CheckpointKind kind,
+    String? stageId,
     GeoPoint? location,
   }) {
     return _repository.updateCheckpoint(
@@ -44,6 +47,7 @@ class CheckpointsCubit extends Cubit<CheckpointsState> {
       checkpointId: checkpointId,
       code: code,
       kind: kind,
+      stageId: stageId,
       location: location,
     );
   }

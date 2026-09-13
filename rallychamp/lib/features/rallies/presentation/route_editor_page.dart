@@ -10,7 +10,9 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/location/current_position.dart';
 import '../../../core/map/app_map_interaction.dart';
 import '../bloc/checkpoints_cubit.dart';
+import '../bloc/checkpoints_state.dart';
 import '../bloc/stages_cubit.dart';
+import '../data/checkpoint.dart';
 import '../data/stage.dart';
 import 'checkpoint_form_dialog.dart';
 
@@ -142,18 +144,27 @@ class _RouteEditorPageState extends State<RouteEditorPage> {
 
   Future<void> _markCheckpoint(int index) async {
     final point = _route[index];
+    final checkpointsState = context.read<CheckpointsCubit>().state;
+    final existingCheckpoints = checkpointsState is CheckpointsLoaded
+        ? checkpointsState.checkpoints
+        : const <Checkpoint>[];
     final result = await showCheckpointFormDialog(
       context,
       title: 'Mark checkpoint',
       submitLabel: 'Mark',
       showLocationCapture: false,
       initialLocation: GeoPoint(point.latitude, point.longitude),
+      // No stage picker here: marking a point on *this* stage's route can
+      // only ever belong to this stage.
+      initialStageId: widget.stage.id,
+      existingCheckpoints: existingCheckpoints,
     );
     if (result == null || !mounted) return;
     try {
       await context.read<CheckpointsCubit>().addCheckpoint(
         code: result.code,
         kind: result.kind,
+        stageId: result.stageId,
         location: result.location,
       );
       if (!mounted) return;

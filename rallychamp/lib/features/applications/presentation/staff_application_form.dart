@@ -52,11 +52,47 @@ class _StaffApplicationFormViewState
   final _oibController = TextEditingController();
   final _licenseController = TextEditingController();
 
+  /// What the name field started as (the Google account's display name, or
+  /// blank) — kept so [_loadProfile] can tell "still the auto-filled
+  /// value" apart from "the user already typed something else", since
+  /// unlike the other fields this one doesn't start empty.
+  String _authDisplayName = '';
+
   @override
   void initState() {
     super.initState();
-    final user = AuthRepository().currentUser;
-    _nameController.text = user?.displayName ?? '';
+    _authDisplayName = AuthRepository().currentUser?.displayName ?? '';
+    _nameController.text = _authDisplayName;
+    _loadProfile();
+  }
+
+  /// Prefills every field from `users/{uid}` if this isn't the user's
+  /// first application — still fully editable, so a stale or wrong stored
+  /// value is a two-second fix, not a retype from scratch. Each field is
+  /// guarded against overwriting something the user already typed while
+  /// this (async, possibly slow on a cold start) read was in flight: the
+  /// others check for still-empty, and the name field — which starts
+  /// non-empty from the account's display name — checks it still matches
+  /// that starting value, since a stored profile name (given explicitly on
+  /// a past application) is more likely correct than a Google account name
+  /// that might be a nickname or a shared family account.
+  Future<void> _loadProfile() async {
+    final profile = await ApplicationsRepository().getMyProfile();
+    if (!mounted || profile == null) return;
+    setState(() {
+      if (profile.name != null && _nameController.text == _authDisplayName) {
+        _nameController.text = profile.name!;
+      }
+      if (_phoneController.text.isEmpty && profile.phone != null) {
+        _phoneController.text = profile.phone!;
+      }
+      if (_oibController.text.isEmpty && profile.oib != null) {
+        _oibController.text = profile.oib!;
+      }
+      if (_licenseController.text.isEmpty && profile.licenseNumber != null) {
+        _licenseController.text = profile.licenseNumber!;
+      }
+    });
   }
 
   @override

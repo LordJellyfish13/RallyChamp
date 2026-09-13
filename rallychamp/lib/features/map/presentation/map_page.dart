@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/active_rally/active_rally_cubit.dart';
 import '../../../core/active_rally/active_rally_state.dart';
 import '../../../core/active_rally/active_rally_switcher.dart';
 import '../../../core/active_rally/no_active_rally.dart';
 import '../../../core/map/app_map_interaction.dart';
+import '../../../core/map/directions_link.dart';
 import '../../../core/map/tile_downloader.dart';
 import '../../../core/map/tile_math.dart';
 import '../../rallies/bloc/checkpoints_cubit.dart';
@@ -356,7 +356,7 @@ class _RallyMapState extends State<_RallyMap> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => _openDirections(checkpoint),
+                    onPressed: () => openDirections(checkpoint.location!),
                     icon: const Icon(Icons.directions),
                     label: const Text('Get directions'),
                   ),
@@ -367,15 +367,6 @@ class _RallyMapState extends State<_RallyMap> {
         );
       },
     );
-  }
-
-  Future<void> _openDirections(Checkpoint checkpoint) {
-    final location = checkpoint.location!;
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1'
-      '&destination=${location.latitude},${location.longitude}',
-    );
-    return launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 

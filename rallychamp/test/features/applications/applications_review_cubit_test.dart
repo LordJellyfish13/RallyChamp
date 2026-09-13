@@ -7,7 +7,7 @@ import 'package:rallychamp/features/applications/data/applications_repository.da
 import 'package:rallychamp/features/applications/data/staff_application_summary.dart';
 import 'package:rallychamp/features/applications/data/staff_role.dart';
 
-class _FakeApplicationsRepository implements ApplicationsRepository {
+class _FakeApplicationsRepository extends Fake implements ApplicationsRepository {
   final _controller = StreamController<List<StaffApplicationSummary>>();
   Map<String, Object?>? lastReview;
 
@@ -31,31 +31,10 @@ class _FakeApplicationsRepository implements ApplicationsRepository {
     };
   }
 
-  @override
-  Future<void> submitStaffApplication({
-    required String rallyId,
-    required StaffRole role,
-    required String name,
-    required String phone,
-    required String oib,
-    String? licenseNumber,
-  }) async {}
-
-  @override
-  Future<void> submitTeamEntry({
-    required String rallyId,
-    required String teamName,
-    required String driverName,
-    required String coDriverName,
-    required String carNumber,
-    required String carClass,
-    required String phone,
-    required String oib,
-  }) async {}
-
   void emit(List<StaffApplicationSummary> applications) =>
       _controller.add(applications);
   void dispose() => _controller.close();
+
 }
 
 StaffApplicationSummary _summary({
